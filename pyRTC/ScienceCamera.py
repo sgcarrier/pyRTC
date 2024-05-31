@@ -22,8 +22,8 @@ class ScienceCamera:
         self.imageDType = np.int32
         self.psfLongDtype = np.float64
         
-        self.psfShort = ImageSHM("psfShort", self.imageShape, self.imageDType)
-        self.psfLong = ImageSHM("psfLong", self.imageShape, self.psfLongDtype)
+        self.psfShort = ImageSHM(f"psfShort_{self.name}", self.imageShape, self.imageDType)
+        self.psfLong = ImageSHM(f"psfLong_{self.name}", self.imageShape, self.psfLongDtype)
         self.data = np.zeros(self.imageShape, dtype=self.imageRawDType)
         self.dark = np.zeros(self.imageShape, dtype=self.imageDType)
         self.darkCount = conf["darkCount"]

@@ -1,0 +1,88 @@
+
+
+wfc:
+  name: "ALPAO"
+  serial: "BOL106"
+  numActuators: 97
+  numModes: 97
+  flatFile: "res/best_flat.npy" #"/home/whetstone/pyRTC/SHARP_LAB/wfcShape.npy"
+  saveFile: "res/save.npy" #"/home/whetstone/pyRTC/SHARP_LAB/wfcShape.npy"
+  m2cFile:  "res/M2C_KL_97.npy"  #"/home/whetstone/pyRTC/SHARP_LAB/m2c_kl.npy" 
+  floatingActuatorsFile: "" #"/home/whetstone/pyRTC/SHARP_LAB/floating_actuators_indices.npy"
+  floatingInfluenceRadius: 1
+  affinity: 5
+  commandCap: 0.4
+  hardwareDelay: 0.001 #seconds
+  frameDelay: 0
+  functions:
+  - sendToHardware
+
+dmpsf:
+  name: "DMPSF"
+  index: 0
+  serial: "12270103"
+  width: 480
+  height: 640
+  darkCount: 1000
+  integration: 100
+  exposure: 500
+  bitDepth: 16
+  affinity: 3
+  functions:
+  - expose
+  - integrate
+  
+
+
+modpsf:
+  name: "MODPSF"
+  index: 1
+  serial: "12210161"
+  width: 480
+  height: 640
+  darkCount: 1000
+  darkFile: "res/modpsf_dark_29_05_2024.npy"
+  integration: 100
+  exposure: 500
+  bitDepth: 16
+  affinity: 3
+  functions:
+  - expose
+  - integrate
+
+  
+fsm:
+  name: 'E-517'
+  libFolder: './'
+  digitalFreq: 25000 #Hz
+  frequency: 16 #Hz
+  amplitude: 0.7
+  relativeAmplitude: 1
+  numOfTRFrames: 48
+  modLambdaFactor: 1
+  offsetX: 5
+  offsetY: 5
+  maxValue: 8
+  minValue: 2
+  phaseOffset: 0
+  servosOn: False
+  autoZero: False
+
+
+
+wfs:
+  name: ANDOR_IXON
+  idx: 0
+  #binning: 1 #2
+  exposure: 0.01
+  #gain: 0
+  #bitDepth: 10
+  #left: 416 #208
+  #top: 280 #140
+  width: 128
+  height: 128 
+  darkCount: 0
+  darkFile: "" #"dark.npy"
+  affinity: 3
+  functions:
+  - expose

@@ -47,6 +47,7 @@ class RealTimeView(QMainWindow):
         ASPECTCAP = 10
         if shm_width/shm_height < 1/ASPECTCAP or shm_width/shm_height > ASPECTCAP:
             aspect = "auto"
+        aspect = "equal"
 
         self.im = self.axes.imshow(frame, cmap='inferno', interpolation='nearest', aspect=aspect,
                                 origin='upper',vmin = np.min(frame), vmax = np.max(frame))
@@ -60,6 +61,7 @@ class RealTimeView(QMainWindow):
         self.logButton = QPushButton('Toggle Log Colorbar')
         self.logButton.clicked.connect(self.toggleLog)
 
+        plt.gca().set_aspect('equal')
         # plt.colorbar()
         # Create Matplotlib canvas
         self.canvas = FigureCanvas(self.figure)
@@ -72,6 +74,8 @@ class RealTimeView(QMainWindow):
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_view)
         self.timer.start(1000 //fps)
+
+
 
     def update_view(self):
         # try:

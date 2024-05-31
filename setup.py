@@ -16,7 +16,11 @@ setup(
                       'scipy',
                       'pyqt5',
                       'argparse',
-                      'psutil'             
+                      'psutil',
+                      'pylablib',
+                      'aotools==1.0.6',
+                      'pipython',
+                      'rotpy'             
                       ],
 
     classifiers=[
