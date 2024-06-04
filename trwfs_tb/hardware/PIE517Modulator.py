@@ -46,7 +46,7 @@ class PIE517Modulator(Modulator):
 
         self.defineCircle()
 
-        #self.makeWavetables()
+        self.makeWavetables()
 
         return
     
@@ -81,33 +81,55 @@ class PIE517Modulator(Modulator):
             self.mod.WSL(self.wavegens, self.wavetables)
 
 
-    # def start(self):
-    #     super().start()
-    #     #Move axes to their start positions
-    #     startpos = (self.offsetX, self.offsetY + self.amplitudeY / 2)
-    #     pos = {"A": startpos[0], "B": startpos[1]}
-    #     self.goTo(startpos)
+    def start(self):
+        if self.checkValues():
+            super().start()
+            #Move axes to their start positions
+            startpos = (self.offsetX, self.offsetY + self.amplitudeY / 2)
+            pos = {"A": startpos[0], "B": startpos[1]}
+            self.goTo(startpos)
+            
+            #Start wave generators {}'.format(self.wavegens))
+            self.mod.WGO(self.wavegens, mode=[1] * len(self.wavegens))
+
+
+    def stop(self):
+        super().stop()
+        #Reset wave generators
+        self.mod.WGO(self.wavegens, mode=[0] * len(self.wavegens))
+
+        pitools.waitonready(self.mod)
+        time.sleep(0.1)
+        pos = {"A": self.offsetX, "B": self.offsetY}
+        self.goTo(pos)
+        pitools.waitonready(self.mod)
+        return
+    
+
+    def checkValues(self):
+        #Check max/min values
+        max_pos = np.max([self.offsetX + (self.amplitudeX / 2), self.offsetY + (self.amplitudeY / 2) ])
+        min_pos = np.min([self.offsetX - (self.amplitudeX / 2), self.offsetY - (self.amplitudeY / 2) ])
+
+        if max_pos > self.maxChannelValue:
+            print("WARNING!!! Tried to set a value in the wavetable that EXCEEDS max channel value setting!")
+            return False
+        if min_pos < self.minChannelValue:
+            print("WARNING!!! Tried to set a value in the wavetable BELOW min channel value setting!")
+            return False
         
-    #     #Start wave generators {}'.format(self.wavegens))
-    #     self.mod.WGO(self.wavegens, mode=[1] * len(self.wavegens))
-
-
-    # def stop(self):
-    #     super().stop()
-    #     #Reset wave generators
-    #     self.mod.WGO(self.wavegens, mode=[0] * len(self.wavegens))
-    #     return
+        return True
 
     def defineCircle(self):
+        if self.checkValues():
+            angles = np.linspace(0, np.pi*2, self.numOfTRFrames, endpoint=False)
 
-        angles = np.linspace(0, np.pi*2, self.numOfTRFrames, endpoint=False)
+            XX = np.cos(angles)*(self.amplitudeX/2) + self.offsetX
+            YY = np.sin(angles)*(self.amplitudeY/2) + self.offsetY
 
-        XX = np.cos(angles)*self.modLambdaFactor + self.offsetX
-        YY = np.sin(angles)*self.modLambdaFactor + self.offsetY
-
-        self.points = []
-        for i in range(self.numOfTRFrames):
-            self.points.append({"A": XX[i], "B": YY[i]})
+            self.points = []
+            for i in range(self.numOfTRFrames):
+                self.points.append({"A": XX[i], "B": YY[i]})
 
 
         self.currentPos = None

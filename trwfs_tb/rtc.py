@@ -3,6 +3,9 @@ from hardware.AndorIXonCam import AndorIXon
 from pyRTC.hardware.ALPAODM import *
 from hardware.PIE517Modulator import PIE517Modulator
 from hardware.PGScienceCam import *
+from hardware.HASO_SH import HASO_SH
+from pyRTC.SlopesProcess import SlopesProcess
+
 
 from pyRTC.utils import *
 
@@ -16,6 +19,7 @@ confDM     = conf[    "wfc"]
 confMODPSF = conf[ "modpsf"]
 confMOD    = conf[    "fsm"]
 confWFS    = conf[    "wfs"]
+confSHWFS  = conf[  "shwfs"]
 
 
 # %% Create DM PSF Cam
@@ -50,7 +54,7 @@ wfs = AndorIXon(conf=confWFS)
 wfs.open_shutter()
 
 wfs.start()
-
+wfs.setExposure(0.062)
 
 # %% Run a few modulations
 for i in range(48*5):
@@ -113,6 +117,25 @@ pos = {"A": 5.0, "B": 5.0}
 fsm.goTo(pos)
 print(fsm.getCurrentPos())
 
+
+#%%
+fsm.start()
+
+#%%
+fsm.stop()
+
+
+#%% Setup SH WFS
+#sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..//..//..//" ))
+#shwfs = HASO_SH(confSHWFS) 
+#shwfs.start()
+
+
+#%%
+#slope = SlopesProcess(conf)
+#slope.start()
+
+
 # %%
 wfs.stop()
 time.sleep(1)
@@ -123,6 +146,9 @@ time.sleep(1)
 wfc.stop()
 time.sleep(1)
 modpsf.stop()
+
+time.sleep(1)
+fsm.stop()
 
 
 

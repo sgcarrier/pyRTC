@@ -54,16 +54,16 @@ modpsf:
 fsm:
   name: 'E-517'
   libFolder: './'
-  digitalFreq: 25000 #Hz
-  frequency: 16 #Hz
-  amplitude: 0.7
-  relativeAmplitude: 1
+  digitalFreq: 25000 #Hz, fixed from andor
+  frequency: 16 #Hz, tuned by user
+  amplitude: 1.5
+  relativeAmplitude: 0.7763 # calculated by user
   numOfTRFrames: 48
   modLambdaFactor: 1
   offsetX: 5
   offsetY: 5
-  maxValue: 8
-  minValue: 2
+  maxValue: 7
+  minValue: 3
   phaseOffset: 0
   servosOn: False
   autoZero: False
@@ -81,8 +81,42 @@ wfs:
   #top: 280 #140
   width: 128
   height: 128 
-  darkCount: 0
-  darkFile: "" #"dark.npy"
+  darkCount: 1000
+  darkFile: "res/andor_dark.npy"
   affinity: 3
   functions:
   - expose
+
+
+shwfs:
+  name: HASO4
+  idx: 0
+  #binning: 1 #2
+  exposure: 1000
+  #gain: 0
+  #bitDepth: 10
+  #left: 416 #208
+  #top: 280 #140
+  width: 494
+  height:  659
+  darkCount: 0
+  darkFile: "" #"dark.npy"
+  confFile: "c:\\Program Files\\Imagine Optic\\Configuration Files\\WFS_HASO4_first_7418.dat"
+  affinity: 3
+  functions:
+  - expose
+
+
+slopes:
+  type: SHWFS
+  signalType: slopes
+  refSlopesFile: ""
+  validSubApsFile: ""
+  subApSpacing: 15.4375 
+  subApOffsetX: 18 #20
+  subApOffsetY: 16 #17
+  imageNoise: 0.5
+  contrast: 20
+  affinity: 4
+  functions:
+  - computeSignal
