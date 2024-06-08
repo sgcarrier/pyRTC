@@ -179,7 +179,7 @@ class SlopesProcess:
         return self.wfsShm.read()
 
     def setValidSubAps(self, validSubAps):
-        self.validSubAps = validSubAps.astype(self.validSubAps)
+        self.validSubAps = validSubAps.astype(bool)
         return
     
     def saveValidSubAps(self,filename=''):

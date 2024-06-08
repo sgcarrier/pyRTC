@@ -5,10 +5,10 @@ wfc:
   serial: "BOL106"
   numActuators: 97
   numModes: 97
-  flatFile: "res/best_flat.npy" #"/home/whetstone/pyRTC/SHARP_LAB/wfcShape.npy"
-  saveFile: "res/save.npy" #"/home/whetstone/pyRTC/SHARP_LAB/wfcShape.npy"
-  m2cFile:  "res/M2C_KL_97.npy"  #"/home/whetstone/pyRTC/SHARP_LAB/m2c_kl.npy" 
-  floatingActuatorsFile: "" #"/home/whetstone/pyRTC/SHARP_LAB/floating_actuators_indices.npy"
+  flatFile: "res/modal_best_flat.npy" 
+  saveFile: "res/save.npy" 
+  m2cFile:  "res/M2C_KL_97.npy" 
+  floatingActuatorsFile: "res/floating_actuators.npy"
   floatingInfluenceRadius: 1
   affinity: 5
   commandCap: 0.4
@@ -56,7 +56,7 @@ fsm:
   libFolder: './'
   digitalFreq: 25000 #Hz, fixed from andor
   frequency: 16 #Hz, tuned by user
-  amplitude: 1.5
+  amplitude: 2.5
   relativeAmplitude: 0.7763 # calculated by user
   numOfTRFrames: 48
   modLambdaFactor: 1
@@ -107,16 +107,42 @@ shwfs:
   - expose
 
 
+#slopes:
+#  type: SHWFS
+#  signalType: slopes
+#  refSlopesFile: ""
+#  validSubApsFile: ""
+#  subApSpacing: 15.4375 
+#  subApOffsetX: 18 #20
+#  subApOffsetY: 16 #17
+#  imageNoise: 0.5
+#  contrast: 20
+#  affinity: 4
+#  functions:
+#  - computeSignal
+
 slopes:
-  type: SHWFS
+  type: PYWFS
   signalType: slopes
-  refSlopesFile: ""
-  validSubApsFile: ""
-  subApSpacing: 15.4375 
-  subApOffsetX: 18 #20
-  subApOffsetY: 16 #17
-  imageNoise: 0.5
-  contrast: 20
   affinity: 4
+  flatNorm: True
+  #Specify where the pupils are and how large for a PYWFS
+  pupilsRadius: 17
+  pupils:
+  - 21,22
+  - 106,22
+  - 21,107  
+  - 106,107
   functions:
   - computeSignal
+
+
+loop:
+  gain: 0.1
+  numDroppedModes: 0
+  pokeAmp: 0.001 #
+  numItersIM: 5
+  affinity: 2
+  method: push-pull
+  functions:
+  - standardIntegrator
