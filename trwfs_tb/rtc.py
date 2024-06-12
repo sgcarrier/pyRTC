@@ -58,9 +58,20 @@ time.sleep(1)
 print(fsm.getCurrentPos())
 
 #%%
+from pipython import GCSDevice, pitools
+max_pos_x = []
+max_pos_y = []
 for i in range(48):
     fsm.step()
-    time.sleep(1)
+    time.sleep(0.01)
+    im = modpsf.read()
+    max_pos_x.append(np.unravel_index(im.argmax(), im.shape)[0])
+    max_pos_y.append(np.unravel_index(im.argmax(), im.shape)[1])
+    pitools.waitonready(fsm.mod)
+#%%
+plt.figure()
+plt.scatter(max_pos_x, max_pos_y)
+plt.show()    
 
 # %%
 # Setup Andor Camera
@@ -265,6 +276,14 @@ slope.start()
 #%%
 slope.plotPupils()
 
+#%%
+f, ax = plt.subplots()
+ax.imshow(slope.pupilMask, cmap='gray', interpolation='nearest')
+for i in range(4):
+    cir = plt.Circle((pos[i][0], pos[i][1]), pos[i][2], color='red', fill=False)
+    ax.add_artist(cir)
+plt.show()
+
 #%% 
 # Create loop
 loop = Loop(conf=conf)
@@ -272,6 +291,18 @@ loop = Loop(conf=conf)
 # %%
 loop.computeIM()
 wfc.flatten()
+
+#%%
+plt.figure()
+u,s,v = np.linalg.svd(loop.IM)
+plt.plot(s/np.max(s), label = 'EMPIRICAL')
+plt.yscale("log")
+plt.ylim(1e-3,1.5)
+plt.xlabel("Eigen Mode #", size = 18)
+plt.ylabel("Normalizaed Eigenvalue", size = 18)
+plt.axvline(x = loop.numActiveModes-1, color = 'r', label = 'axvline - full height')
+plt.legend()
+plt.show()
 
 #%% remove edge actuators 
 IM = loop.IM
@@ -300,6 +331,208 @@ time.sleep(5)
 loop.stop()
 np.max(np.abs(wfc.currentShape))
 
+
+
+# %%
+def pushPullIM_cube(loop, fsm):
+    IM_cube = np.zeros((loop.signalSize, 48, loop.numModes),dtype=loop.signalDType)
+
+    ref_slopes = np.zeros((loop.signalSize, 48))
+    fsm.currentPos = None
+
+    # for s in range(len(fsm.points)):
+    #     fsm.step()
+    #     time.sleep(0.1)
+    #     #Average out N new WFS frames
+    #     tmp_plus =  np.zeros((loop.signalSize))
+    #     for n in range(loop.numItersIM):
+    #         tmp_plus += loop.wfsShm.read()
+    #     tmp_plus /= loop.numItersIM
+
+    #     #Compute the normalized difference
+    #     ref_slopes[:,s] =tmp_plus
+
+
+    #For each mode
+    for i in range(10):
+        #Reset the correction
+        correction = loop.flat.copy()
+        #Plus amplitude
+        correction[i] = loop.pokeAmp
+        #Post a new shape to be made
+        loop.wfcShm.write(correction)
+        #Add some delay to ensure one-to-one
+        time.sleep(loop.hardwareDelay)
+        #Burn the first new image since we were moving the DM during the exposure
+        loop.wfsShm.read()
+
+        fsm.currentPos = None
+        for s in range(len(fsm.points)):
+            fsm.step()
+            time.sleep(0.1)
+            #Average out N new WFS frames
+            tmp_plus = np.zeros_like(loop.IM[:,i])
+            for n in range(loop.numItersIM):
+                tmp_plus += loop.wfsShm.read()
+            tmp_plus /= loop.numItersIM
+
+
+            #plus_signal = tmp_plus/np.sum(tmp_plus) #- ref_slopes[:,s]/np.sum(ref_slopes[:,s])
+
+
+        #Reset the correction
+        correction = loop.flat.copy()
+        #Plus amplitude
+        correction[i] = loop.pokeAmp
+        #Post a new shape to be made
+        loop.wfcShm.write(correction)
+        #Add some delay to ensure one-to-one
+        time.sleep(loop.hardwareDelay)
+        #Burn the first new image since we were moving the DM during the exposure
+        loop.wfsShm.read()
+
+        fsm.currentPos = None
+        for s in range(len(fsm.points)):
+            fsm.step()
+            time.sleep(0.1)
+            #Average out N new WFS frames
+            tmp_minus = np.zeros_like(loop.IM[:,i])
+            for n in range(loop.numItersIM):
+                tmp_minus += loop.wfsShm.read()
+            tmp_minus /= loop.numItersIM
+
+
+            # #Minus amplitude
+            # correction[i] = -loop.pokeAmp
+            # #Post a new shape to be made
+            # loop.wfcShm.write(correction)
+            # #Add some delay to ensure one-to-one
+            # time.sleep(loop.hardwareDelay)
+            # #Burn the first new image since we were moving the DM during the exposure
+            # loop.wfsShm.read()
+            # #Average out N new WFS frames
+            # tmp_minus = np.zeros_like(loop.IM[:,i])
+            # for n in range(loop.numItersIM):
+            #     tmp_minus += loop.wfsShm.read()
+            # tmp_minus /= loop.numItersIM
+
+        #Compute the normalized difference
+        IM_cube[:,s,i] = (tmp_plus-tmp_minus)/(2*loop.pokeAmp)
+
+    return IM_cube
+
+def pushPullIM_cube_2(loop, fsm):
+    IM_cube = np.zeros((loop.signalSize, 48, loop.numModes),dtype=loop.signalDType)
+
+    ref_slopes = np.zeros((loop.signalSize, 48))
+    fsm.currentPos = None
+
+    for s in range(len(fsm.points)):
+        fsm.step()
+        time.sleep(0.1)
+        #Average out N new WFS frames
+        ref_slopes[:,s] =  np.zeros((loop.signalSize))
+        for n in range(loop.numItersIM):
+            ref_slopes[:,s] += loop.wfsShm.read()
+        ref_slopes[:,s] /= loop.numItersIM
+
+
+
+    #For each mode
+    for i in range(10):
+        #Reset the correction
+        correction = loop.flat.copy()
+        #Plus amplitude
+        correction[i] = loop.pokeAmp
+        #Post a new shape to be made
+        loop.wfcShm.write(correction)
+        #Add some delay to ensure one-to-one
+        time.sleep(loop.hardwareDelay)
+        #Burn the first new image since we were moving the DM during the exposure
+        loop.wfsShm.read()
+
+        fsm.currentPos = None
+        tmp_plus =  np.zeros((loop.signalSize, 48))
+        for s in range(len(fsm.points)):
+            fsm.step()
+            time.sleep(0.01)
+            #Average out N new WFS frames
+            for n in range(loop.numItersIM):
+                tmp_plus[:,s] += loop.wfsShm.read()
+            tmp_plus[:,s] /= loop.numItersIM
+
+
+            tmp_plus[:,s] = tmp_plus[:,s] - ref_slopes[:,s]
+
+
+
+        #minus amplitude
+        correction[i] = -loop.pokeAmp
+        #Post a new shape to be made
+        loop.wfcShm.write(correction)
+        #Add some delay to ensure one-to-one
+        time.sleep(loop.hardwareDelay)
+        #Burn the first new image since we were moving the DM during the exposure
+        loop.wfsShm.read()
+
+        fsm.currentPos = None
+        tmp_minus =  np.zeros((loop.signalSize, 48))
+        for s in range(len(fsm.points)):
+            fsm.step()
+            time.sleep(0.01)
+            #Average out N new WFS frames
+            for n in range(loop.numItersIM):
+                tmp_minus[:,s] += loop.wfsShm.read()
+            tmp_minus[:,s] /= loop.numItersIM
+
+            tmp_minus[:,s] = tmp_minus[:,s] - ref_slopes[:,s]
+
+
+            # #Minus amplitude
+            # correction[i] = -loop.pokeAmp
+            # #Post a new shape to be made
+            # loop.wfcShm.write(correction)
+            # #Add some delay to ensure one-to-one
+            # time.sleep(loop.hardwareDelay)
+            # #Burn the first new image since we were moving the DM during the exposure
+            # loop.wfsShm.read()
+            # #Average out N new WFS frames
+            # tmp_minus = np.zeros_like(loop.IM[:,i])
+            # for n in range(loop.numItersIM):
+            #     tmp_minus += loop.wfsShm.read()
+            # tmp_minus /= loop.numItersIM
+
+        #Compute the normalized difference
+        IM_cube[:,:,i] = (tmp_plus-tmp_minus)/(2*loop.pokeAmp)
+
+    return IM_cube
+
+#%%
+# Try to get weighted cube
+
+#slope.takeRefSlopes()
+wfc.flatten()
+
+fsm.stop()
+fsm.currentPos = None
+pos = {"A": 5.0, "B": 5.0}
+fsm.goTo(pos)
+time.sleep(1)
+i_cube = pushPullIM_cube_2(loop, fsm)
+#%%
+weighting_cube = np.zeros((48, 10))
+for i in range(10):
+    avg_val = np.mean(i_cube[:, :, i], axis=0)
+
+    weighting_cube[:,i] = np.sqrt(((np.mean((i_cube[:, :, i]-avg_val[np.newaxis,:])**2, axis=0))))
+    weighting_cube[:,i] = (weighting_cube[:,i]  / np.sum(np.abs(weighting_cube[:,i])))*48
+
+#%%
+plt.figure()
+im1 = plt.imshow(weighting_cube)
+plt.colorbar(im1)
+plt.ylabel("Modulation Frame")
+plt.xlabel("KL mode")
 
 #%% 
 #Save fits file
