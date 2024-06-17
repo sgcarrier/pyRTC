@@ -63,6 +63,9 @@ class Loop:
         self.flat = np.zeros(self.numModes, dtype=self.wfcDType)
 
         self.IM = np.zeros((self.signalSize, self.numModes),dtype=self.signalDType)
+        self.numFrames = 48
+        self.IM_cube = np.zeros((self.signalSize, self.numFrames, self.numModes),dtype=self.signalDType)
+
         self.CM = np.zeros((self.numModes, self.signalSize),dtype=self.signalDType)
         self.gain = self.confLoop["gain"]
         self.leakyGain = setFromConfig(self.confLoop, "leakyGain", 0)
@@ -75,6 +78,8 @@ class Loop:
         self.IMFile = setFromConfig(self.confLoop, "IMFile", "")
         
         self.loadIM()
+
+        self.turbulenceGenerator = None
 
         self.alive = True
         self.running = False
@@ -152,6 +157,47 @@ class Loop:
 
             #Compute the normalized difference
             self.IM[:,i] = (tmp_plus-tmp_minus)/(2*self.pokeAmp)
+
+        return
+    
+    def pushPullIM_cube(self, fsm):
+        
+        #For each mode
+        for i in range(self.numModes):
+            for s in range(len(fsm.points)):
+                fsm.step()
+                #Reset the correction
+                correction = self.flat.copy()
+                #Plus amplitude
+                correction[i] = self.pokeAmp
+                #Post a new shape to be made
+                self.wfcShm.write(correction)
+                #Add some delay to ensure one-to-one
+                time.sleep(self.hardwareDelay)
+                #Burn the first new image since we were moving the DM during the exposure
+                self.wfsShm.read()
+                #Average out N new WFS frames
+                tmp_plus = np.zeros_like(self.IM[:,i])
+                for n in range(self.numItersIM):
+                    tmp_plus += self.wfsShm.read()
+                tmp_plus /= self.numItersIM
+
+                #Minus amplitude
+                correction[i] = -self.pokeAmp
+                #Post a new shape to be made
+                self.wfcShm.write(correction)
+                #Add some delay to ensure one-to-one
+                time.sleep(self.hardwareDelay)
+                #Burn the first new image since we were moving the DM during the exposure
+                self.wfsShm.read()
+                #Average out N new WFS frames
+                tmp_minus = np.zeros_like(self.IM[:,i])
+                for n in range(self.numItersIM):
+                    tmp_minus += self.wfsShm.read()
+                tmp_minus /= self.numItersIM
+
+                #Compute the normalized difference
+                self.IM_cube[:,s,i] = (tmp_plus-tmp_minus)/(2*self.pokeAmp)
 
         return
     
@@ -264,6 +310,23 @@ class Loop:
 
         return
 
+    def standardIntegratorWithTurbulence(self):
+
+        if self.turbulenceGenerator != None:
+            self.turbModes = self.turbulenceGenerator.getNextTurbAsModes()
+        else:
+            self.turbModes = 0
+        slopes = self.wfsShm.read()
+        currentCorrection = self.wfcShm.read()
+        newCorrection = updateCorrection(correction=currentCorrection, 
+                                        gCM=self.gCM, 
+                                        slopes=slopes)
+        newCorrection[self.numActiveModes:] = 0
+        self.wfcShm.write(newCorrection + self.turbModes)
+
+
+    def setTurbulenceGenerator(self, turb):
+        self.turbulenceGenerator = turb
     
     def standardIntegrator(self):
 

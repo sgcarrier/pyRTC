@@ -1,5 +1,8 @@
 
 # %%
+import numpy as np
+import matplotlib.pyplot as plt
+
 t = modpsf.read()
 ts = np.argsort(t)
 t_flat= t.flatten()
@@ -78,4 +81,24 @@ relative_factor = (high_x-low_x) / (high_y-low_y)
 
 print(f"Relative factor between X and Y is {relative_factor}")
 
+# %%
+
+
+#%%
+t_im = modpsf.read()
+for i in range(9):
+    t_im += modpsf.read()
+t_im = t_im / 10.0
+t_im_slice = t_im[257,:]
+
+FWHM_lvl = np.max(t_im_slice)/2
+
+FWHM = t_im_slice < FWHM_lvl
+
+
+
+plt.figure()
+plt.plot(t_im_slice[250:450])
+plt.axhline(FWHM_lvl)
+plt.show()
 # %%

@@ -7,7 +7,7 @@ wfc:
   numModes: 69
   flatFile: "res/new_flat_2.npy" 
   saveFile: "res/save.npy" 
-  m2cFile:  "res/M2C_KL_69_edgeless.npy" 
+  m2cFile:  "res/M2C_KL_69_interior.npy" 
   floatingActuatorsFile: "res/floating_actuators.npy"
   floatingInfluenceRadius: 1
   affinity: 5
@@ -140,9 +140,9 @@ slopes:
 loop:
   gain: 0.1
   numDroppedModes: 0
-  pokeAmp: 0.005 #
+  pokeAmp: 0.001 #
   numItersIM: 5
   affinity: 2
   method: push-pull
   functions:
-  - standardIntegrator
+  - standardIntegratorWithTurbulence
