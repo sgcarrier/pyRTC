@@ -7,7 +7,7 @@ wfc:
   numModes: 68
   flatFile: "res/flat_20june2024.npy" 
   saveFile: "res/save.npy" 
-  m2cFile: "res/new_M2C_68_JP_max1_19june_2.npy" 
+  m2cFile: "res/new_M2C_68_JP_1um_21june.npy" 
   floatingActuatorsFile: "res/floating_actuators.npy"
   floatingInfluenceRadius: 1
   affinity: 5
@@ -27,7 +27,9 @@ dmpsf:
   #top: 200
   #width: 128
   #height: 128
-  darkCount: 1000
+  darkCount: 100
+  darkFile: "res/dmpsf_dark_21_06_2024.npy"
+  modelFile: "res/dmpsf_psfmodel_21_06_2024.npy"
   integration: 100
   exposure: 500
   bitDepth: 16
@@ -45,7 +47,7 @@ modpsf:
   serial: "12210161"
   width: 480
   height: 640
-  darkCount: 1000
+  darkCount: 100
   darkFile: "res/modpsf_dark_29_05_2024.npy"
   integration: 100
   exposure: 500
@@ -156,12 +158,13 @@ slopes:
 loop:
   gain: 0.5
   numDroppedModes: 0
-  pokeAmp: 0.01 #
+  pokeAmp: 0.001 #
   numItersIM: 5
   affinity: 2
   method: push-pull
-  IMFile: "res/IM_20june2024.npy"
-  IMCubeFile: "res/IM_cube_20june2024.npy"
-  weightFile : "res/frame_weights_20june2024_norm.npy"
+  #IMFile: "res/IM_20june2024.npy"
+  #IMCubeFile: "res/IM_cube_20june2024.npy"
+  #weightFile : "res/frame_weights_20june2024_norm.npy"
   functions:
-  - timeResolvedIntegratorWithTurbulence
+  - standardIntegratorWithTurbulence
+  #- timeResolvedIntegratorWithTurbulence
