@@ -85,9 +85,9 @@ class PIE517Modulator(Modulator):
         if self.checkValues():
             super().start()
             #Move axes to their start positions
-            startpos = (self.offsetX, self.offsetY + self.amplitudeY / 2)
-            pos = {"A": startpos[0], "B": startpos[1]}
-            self.goTo(startpos)
+            #startpos = (self.offsetX, self.offsetY + self.amplitudeY / 2)
+            #pos = {"A": startpos[0], "B": startpos[1]}
+            #self.goTo(startpos)
             
             #Start wave generators {}'.format(self.wavegens))
             self.mod.WGO(self.wavegens, mode=[1] * len(self.wavegens))

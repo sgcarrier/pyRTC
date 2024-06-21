@@ -90,12 +90,12 @@ wfs.setExposure(0.0625)
 #%%
 ################### Start modulation ###################
 fsm.start()
-modpsf.setExposure(62500)
+#modpsf.setExposure(62500)
 
 #%%
 ################### Stop modulation ###################
 fsm.stop()
-modpsf.setExposure(500)
+#modpsf.setExposure(500)
 
 
 #%%
@@ -116,8 +116,8 @@ overlayCalcPosWithPupilMask(pupil_pos, slope)
 
 #%% 
 ################### Create loop ###################
-#loop = Loop(conf=conf)
-loop = TimeResolvedLoop(conf=conf, fsm=fsm)
+loop = Loop(conf=conf)
+#loop = TimeResolvedLoop(conf=conf, fsm=fsm)
 
 # %%
 ################### Compute Interaction Matrix ###################
@@ -149,9 +149,10 @@ plt.colorbar()
 plt.show()
 #%%
 loop.start()
-time.sleep(6)
+time.sleep(1)
 loop.stop()
 print(np.max(np.abs(wfc.currentShape)))
+
 
 
 
@@ -159,9 +160,9 @@ print(np.max(np.abs(wfc.currentShape)))
 #%%
 ################### Turbulence ###################
 from scripts.turbulencePreGen import *
-turb = np.load("res/turb_coeff_20june2024.npy")
+turb = np.load("res/turb_coeff_Jun21_with_floating.npy")
 
-turb /= 100
+turb /= 5
 turb_no_piston = turb[:,1:]
 atm = DummyAtm(turb_no_piston)
 
@@ -169,10 +170,17 @@ t = atm.getNextTurbAsModes()
 t_cmd =ModaltoZonalWithFlat(t, 
                      wfc.f_M2C,
                      wfc.flat)
+
+
 print(np.max(np.abs(t_cmd)))
 #%%
+t = atm.getNextTurbAsModes()
 
-
+t_cmd = wfc.f_M2C@t
+phase_screen = np.zeros((11,11))
+phase_screen[atm.mask] =t_cmd 
+plt.imshow(phase_screen)
+plt.colorbar()
 
 #%%
 loop.standardIntegratorWithTurbulence()
@@ -219,13 +227,19 @@ plt.colorbar()
 loop.setTurbulenceGenerator(atm)
 
 #%%
+wfc.flatten()
 loop.timeResolvedIntegratorWithTurbulence()
 print(np.max(np.abs(wfc.currentShape)))
 time.sleep(1)
 wfc.flatten()
 #%%
-for i in range(5):
+wfc.push(0, 0.01)
+num_of_iterations = 5
+strehl_cl = np.zeros(num_of_iterations)
+
+for i in range(num_of_iterations):
     loop.timeResolvedIntegratorWithTurbulence()
+    strehl_cl[i] = dmpsf.strehl_ratio
     print(np.max(np.abs(wfc.currentShape)))
 
 
@@ -284,9 +298,10 @@ hdu.writeto("0mod_flat.fits", overwrite=True)
 
 #%%
 from astropy.io import fits as pyfits
-hdul = pyfits.open('turb_coeff_Jun20.fits')
+hdul = pyfits.open('turb_coeff_Jun21_with_floating.fits')
 data = hdul[0].data
 
+np.save("res/turb_coeff_Jun21_with_floating.npy", data)
 
 # %%
 ################### Stop all ###################
@@ -305,7 +320,7 @@ time.sleep(1)
 slope.stop()
 
 time.sleep(1)
-modpsf.stop()
+dmpsf.stop()
 
 
 #%% remove edge actuators 

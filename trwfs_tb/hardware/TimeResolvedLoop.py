@@ -158,6 +158,7 @@ class TimeResolvedLoop(Loop):
 
         if self.turbulenceGenerator != None:
             self.turbModes = self.turbulenceGenerator.getNextTurbAsModes()
+
         else:
             self.turbModes = 0
 
@@ -169,6 +170,10 @@ class TimeResolvedLoop(Loop):
                                            slopes_TR=slopes_TR,
                                            weights=self.frame_weights)
         newCorrection[self.numActiveModes:] = 0
+        print(f"Current correction = {newCorrection}")
+        if self.turbulenceGenerator != None:
+            print(f"Turb : {self.turbModes}")
+
         self.wfcShm.write(newCorrection + self.turbModes)
 
 
