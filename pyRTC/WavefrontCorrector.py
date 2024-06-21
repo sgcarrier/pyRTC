@@ -182,8 +182,8 @@ class WavefrontCorrector:
             return
         
         #Normalize each mode
-        for i in range(M2C.shape[1]):
-            M2C[:,i] /= np.std(M2C[:,i])
+        #for i in range(M2C.shape[1]):
+        #    M2C[:,i] /= np.std(M2C[:,i])
         self.setM2C(M2C)
         return 
     

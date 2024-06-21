@@ -4,10 +4,10 @@ wfc:
   name: "ALPAO"
   serial: "BOL106"
   numActuators: 97
-  numModes: 69
-  flatFile: "res/new_flat_2.npy" 
+  numModes: 68
+  flatFile: "res/flat_20june2024.npy" 
   saveFile: "res/save.npy" 
-  m2cFile:  "res/M2C_KL_69_interior.npy" 
+  m2cFile: "res/new_M2C_68_JP_max1_19june_2.npy" 
   floatingActuatorsFile: "res/floating_actuators.npy"
   floatingInfluenceRadius: 1
   affinity: 5
@@ -23,6 +23,10 @@ dmpsf:
   serial: "12270103"
   width: 480
   height: 640
+  #left: 300
+  #top: 200
+  #width: 128
+  #height: 128
   darkCount: 1000
   integration: 100
   exposure: 500
@@ -31,6 +35,7 @@ dmpsf:
   functions:
   - expose
   - integrate
+  - computeStrehl
   
 
 
@@ -137,12 +142,26 @@ slopes:
   - computeSignal
 
 
+# loop:
+#   gain: 0.5
+#   numDroppedModes: 0
+#   pokeAmp: 0.01 #
+#   numItersIM: 5
+#   affinity: 2
+#   method: push-pull
+#   functions:
+#   - standardIntegratorWithTurbulence
+
+
 loop:
-  gain: 0.1
+  gain: 0.5
   numDroppedModes: 0
-  pokeAmp: 0.001 #
+  pokeAmp: 0.01 #
   numItersIM: 5
   affinity: 2
   method: push-pull
+  IMFile: "res/IM_20june2024.npy"
+  IMCubeFile: "res/IM_cube_20june2024.npy"
+  weightFile : "res/frame_weights_20june2024_norm.npy"
   functions:
-  - standardIntegratorWithTurbulence
+  - timeResolvedIntegratorWithTurbulence

@@ -53,7 +53,7 @@ class OOPAO_atm():
         return self.atm.OPD
     
     def getNextTurbAsModes(self):
-        atm_phase = self.rebin(self.getNextAtmOPD(), (11,11)) * 1000
+        atm_phase = self.rebin(self.getNextAtmOPD(), (11,11)) *10
         modes_to_send = self.C2M @  atm_phase[self.mask]
         return modes_to_send
     

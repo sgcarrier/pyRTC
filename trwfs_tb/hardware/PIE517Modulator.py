@@ -135,6 +135,10 @@ class PIE517Modulator(Modulator):
         self.currentPos = None
 
     def step(self):
+        if self.running:
+            print("Warning tried to move manually when modulating with wavetable! Ignoring move command")
+            return 
+        
         if self.currentPos == None:
             self.currentPos = 0
             self.goTo(self.points[self.currentPos])
@@ -145,8 +149,29 @@ class PIE517Modulator(Modulator):
             self.currentPos += 1
             self.goTo(self.points[self.currentPos])
 
+    
+    def resetPos(self):
+        '''
+        Reset the current position counter to None and sets the position to default.
+        This means the next time step() is called, it will go to the first position
+        in the defined circle.
+        '''
+        if self.running:
+            print("Warning tried to move manually when modulating with wavetable! Ignoring move command")
+            return 
+        
+        self.currentPos = None
+        pos = {"A": self.offsetX, "B": self.offsetY}
+        self.goTo(pos)
+        pitools.waitonready(self.mod)
+        return
+
 
     def goTo(self, pos):
+        if self.running:
+            print("Warning tried to move manually when modulating with wavetable! Ignoring move command")
+            return 
+        
         if isinstance(pos, dict):
             # Using a dictionary of the channels and values we want to assign to those channels
             for channel, value in pos.items():
