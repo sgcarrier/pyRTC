@@ -37,21 +37,22 @@ for i in range(69):
 #%%
 
 from astropy.io import fits as pyfits
-hdul = pyfits.open('mat69_from_poke_influence_97_19juin.fits')
+hdul = pyfits.open('mta69_from_poke_influence_97_20june_with_floating.fits')
 a = hdul[0].data
 
 #%%
 disp_a = np.zeros((11,11))
-disp_a[small_mask] = a[5,:]
+disp_a[small_mask] = a[5,:] 
 plt.imshow(disp_a)
 plt.colorbar()
 #%%
 
 a_no_flat = a[1:,:]
-for i in range(68):
-    a_no_flat[i,:] -= a[0,:]
+# for i in range(68):
+#     a_no_flat[i,:] -= a[0,:]
 #%%
 factor = 1/np.max(np.abs(a_no_flat)) * 1
+factor = 1
 a_norm = a_no_flat * factor
 a_norm_no_piston = a_norm
 #%%
@@ -61,12 +62,12 @@ for i in range(68):
     a_final[i,flat_mask] = a_norm_no_piston[i,:]
 #%%
 disp_a = np.zeros((11,11))
-disp_a[big_mask] = a_final[4,:]
+disp_a[big_mask] = a_final[1,:]
 plt.imshow(disp_a)
 plt.colorbar()
 
 #%%
-np.save("new_M2C_68_JP_max1_19june_2.npy", a_final.T)
+np.save("res/new_M2C_68_JP_1um_21june.npy", a_final.T)
 
 #%%
 small_mask = genMask(11, 9/2)

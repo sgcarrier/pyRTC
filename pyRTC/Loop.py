@@ -80,6 +80,7 @@ class Loop:
         self.loadIM()
 
         self.turbulenceGenerator = None
+        self.currentCorrection = np.zeros((self.numModes))
 
         self.alive = True
         self.running = False
@@ -314,17 +315,27 @@ class Loop:
 
         if self.turbulenceGenerator != None:
             self.turbModes = self.turbulenceGenerator.getNextTurbAsModes()
+            print(f"Turb      modes 0,1 : {self.turbModes[0:2]}")
         else:
             self.turbModes = 0
         slopes = self.wfsShm.read()
-        currentCorrection = self.wfcShm.read()
-        newCorrection = updateCorrection(correction=currentCorrection, 
+
+        # Remove this next line because it would grab the current correction AND turbulence applied to the DM 
+        #currentCorrection = self.wfcShm.read()
+
+        # The operation done here is: correction - np.dot(gCM,slopes)
+        newCorrection = updateCorrection(correction=self.currentCorrection, 
                                         gCM=self.gCM, 
                                         slopes=slopes)
         newCorrection[self.numActiveModes:] = 0
-        self.wfcShm.write(newCorrection + self.turbModes)
+        self.wfcShm.write(self.turbModes + newCorrection)
+        # Instead keep track of the currentCorrection manually instead of fetching from DM 
+        self.currentCorrection = newCorrection
 
+    def resetCurrentCorrection(self):
+        self.currentCorrection = np.zeros((self.numModes))
 
+#        print(f"Perceived modes 0,1 : {np.dot(self.CM, slopes)[0:2]}")
     def setTurbulenceGenerator(self, turb):
         self.turbulenceGenerator = turb
     

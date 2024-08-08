@@ -31,7 +31,7 @@ try:
     slopes = wkpy.HasoSlopes(image= img_test, config_file_path = confSHWFS["confFile"])
 except Exception as e:
     print(str(e))
-    print("test")
+    print("Error: Most likely there is not enough light to determine slopes")
 
 #%%
 filter = [False, False, False, False, False]

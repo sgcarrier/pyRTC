@@ -20,6 +20,11 @@ class AndorIXon(WavefrontSensor):
             self.cam.set_cooler(on=False)
 
 
+        self.total_photon_flux = 0
+        self.activateNoise = False
+
+        self.random_state_photon_noise = np.random.default_rng(seed=int(time.time()))
+
         if "exposure" in conf:
             self.setExposure(conf["exposure"])
 
@@ -53,8 +58,28 @@ class AndorIXon(WavefrontSensor):
         self.data = np.ndarray((self.img.shape[0],self.img.shape[1]), 
                                buffer= self.img, 
                                dtype=np.uint16)
+        #data_float = np.ndarray((self.img.shape[0],self.img.shape[1]), 
+        #                       buffer= self.img, 
+        #                       dtype=np.float32)
+        
+        data_float = self.data.astype(np.float32)
+        
+        #data_no_dark = self.data.astype(self.imageDType) - self.dark 
 
-        super().expose()
+        #data_no_dark[data_no_dark<0] = 0
+
+
+        if self.total_photon_flux > 0:
+            data_float = (((data_float) / np.sum(data_float) * self.total_photon_flux))
+
+        if self.activateNoise:
+            data_float = (self.random_state_photon_noise.poisson(data_float))
+
+
+        #super().expose()
+        self.imageRaw.write(self.data)
+        #Check float here
+        self.image.write(data_float.astype(self.imageDType))
 
         return
 

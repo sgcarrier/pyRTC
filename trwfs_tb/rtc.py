@@ -90,12 +90,12 @@ wfs.setExposure(0.0625)
 #%%
 ################### Start modulation ###################
 fsm.start()
-#modpsf.setExposure(62500)
+dmpsf.setExposure(1000)
 
 #%%
 ################### Stop modulation ###################
 fsm.stop()
-#modpsf.setExposure(500)
+dmpsf.setExposure(500)
 
 
 #%%
@@ -103,6 +103,10 @@ fsm.stop()
 from scripts.pupilMask import *
 pupil_pos = autoFindAndDisplayPupils(wfs)
 
+#%%
+for i in range(48):
+    fsm.step()
+    time.sleep(1)
 
 #%% 
 ################### Calculate slopes ################### 
@@ -116,9 +120,24 @@ overlayCalcPosWithPupilMask(pupil_pos, slope)
 
 #%% 
 ################### Create loop ###################
-loop = Loop(conf=conf)
-#loop = TimeResolvedLoop(conf=conf, fsm=fsm)
+#loop = Loop(conf=conf)
+loop = TimeResolvedLoop(conf=conf, fsm=fsm)
 
+
+#%%
+loop.calcFrameWeights()
+
+#%%
+plt.figure()
+im1 = plt.imshow(loop.frame_weights)
+plt.colorbar(im1)
+plt.title("Measured weights\nfor each modulation frame and KL mode")
+plt.ylabel("Modulation Frame")
+plt.xlabel("KL mode")
+plt.show()
+
+#%%
+loop.plotWeights()
 # %%
 ################### Compute Interaction Matrix ###################
 loop.computeIM()
@@ -149,22 +168,68 @@ plt.colorbar()
 plt.show()
 #%%
 loop.start()
-time.sleep(1)
+time.sleep(10)
 loop.stop()
 print(np.max(np.abs(wfc.currentShape)))
 
+#%%
+dmpsf.takeModelPSF()
+
+#%%
+wfc.flatten()
+loop.resetCurrentCorrection()
 
 
 
+#%%
+import wavekit_py as wkpy
+confSHWFS  = conf[  "shwfs"]
+try :
+    camera = wkpy.Camera(config_file_path = confSHWFS["confFile"])
+    camera.connect()
+    camera.start(0, 1)
+    camera.set_parameter_value("exposure_duration_us", 40000)
+except Exception as e :
+    print(str(e))
+
+#%%
+def grabHASOImage(camera, confSHWFS):
+    img_test = camera.snap_raw_image()
+
+    try:
+        slopes = wkpy.HasoSlopes(image= img_test, config_file_path = confSHWFS["confFile"])
+    except Exception as e:
+        print(str(e))
+        print("Error: Most likely there is not enough light to determine slopes")
+        return None
+
+    filter = [False, False, False, False, False]
+    filter_array = (ctypes.c_byte * 5)()
+    for i,f in enumerate(filter):
+        filter_array[i] = ctypes.c_byte(0) if f else ctypes.c_byte(1)
+
+    phase = wkpy.Phase(hasoslopes = slopes, type_ = wkpy.E_COMPUTEPHASESET.ZONAL, filter_ = filter_array)
+    WF = phase.get_data()
+    return WF[0]
+
+
+#%%
+# Grab ref wavefront 
+REF_WF = grabHASOImage(camera, confSHWFS)
+plt.imshow(REF_WF)
+plt.colorbar()
 
 #%%
 ################### Turbulence ###################
 from scripts.turbulencePreGen import *
 turb = np.load("res/turb_coeff_Jun21_with_floating.npy")
 
-turb /= 5
+
+turb /= 1
 turb_no_piston = turb[:,1:]
-atm = DummyAtm(turb_no_piston)
+turb_no_piston_first_5_modes = turb_no_piston
+#turb_no_piston_first_5_modes[:, 5:] = 0
+atm = DummyAtm(turb_no_piston_first_5_modes)
 
 t = atm.getNextTurbAsModes()
 t_cmd =ModaltoZonalWithFlat(t, 
@@ -183,10 +248,63 @@ plt.imshow(phase_screen)
 plt.colorbar()
 
 #%%
-loop.standardIntegratorWithTurbulence()
-time.sleep(1)
-print(np.max(np.abs(wfc.currentShape)))
+
+loop.setTurbulenceGenerator(atm)
+
+
+#%%
+wfs.activateNoise = True
+wfs.total_photon_flux = 1000
+#%%
+iterations = 50
+strehls = np.zeros(iterations)
+rms_plot = np.zeros(iterations)
+for i in range(iterations):
+    loop.timeResolvedIntegratorWithTurbulence()
+    #loop.standardIntegratorWithTurbulence()
+    time.sleep(1)
+    strehls[i] = dmpsf.strehl_ratio
+    read_WF = ((REF_WF - grabHASOImage(camera, confSHWFS)))
+    read_WF_valid = read_WF[~np.isnan(read_WF)] 
+    rms_plot[i] = np.sqrt(np.mean(np.square(read_WF_valid - np.mean(read_WF_valid)))) 
+    print(np.max(np.abs(wfc.currentShape)))
+    print(f"it = {i}")
+
+
+#%%
+plt.plot(strehls)
+plt.xlabel("Loop cycles")
+plt.ylabel("Strehl")
+
+#%%
+plt.plot(rms_plot)
+plt.xlabel("Loop cycles")
+plt.ylabel("RMS (um)")
+
+#%%
+plt.plot(rms_plot_normal*1000, label="Normal")
+plt.plot(rms_plot_TR*1000, label="TR")
+plt.xlabel("Loop cycles")
+plt.ylabel("RMS (nm)")
+plt.title("Wavefront RMS in closed loop \n48000 photons/modulation. 68 KL Modes")
+plt.legend()
+#%%
 wfc.flatten()
+loop.resetCurrentCorrection()
+
+
+#%%
+loop.frame_weights = np.ones(loop.frame_weights.shape)
+loop.IM = np.sum(loop.IM_cube * loop.frame_weights[np.newaxis, :, :], axis=1)
+loop.computeCM()
+#%%
+slopes = loop.wfsShm.read()
+for i in range(10-1):
+    slopes+= loop.wfsShm.read()
+slopes /= 10
+print(f"Perceived modes 0,1 : {np.dot(loop.gCM, slopes)[0:5]}")
+
+
 
 # %% Try to get weighted cube
 from scripts.modulation_weights import *
@@ -313,6 +431,12 @@ wfs.close_shutter()
 time.sleep(1)
 wfs.close_camera()
 time.sleep(1)
+
+
+if camera is not None:
+    camera.stop()
+    camera.disconnect()
+
 wfc.stop()
 
 

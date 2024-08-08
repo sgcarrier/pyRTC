@@ -28,6 +28,8 @@ class TimeResolvedLoop(Loop):
         self.IM_cube = np.zeros((self.signalSize, self.numFrames, self.numModes),dtype=self.signalDType)
         self.IMCubeFile = setFromConfig(self.confLoop, "IMCubeFile", "")
 
+        self.currentCorrection = np.zeros((self.numModes))
+
         self.loadIMCube()
 
     def calcFrameWeights(self, maxNumModes=None):
@@ -39,10 +41,16 @@ class TimeResolvedLoop(Loop):
         pos = {"A": 5.0, "B": 5.0}
         self.fsm.goTo(pos)
         time.sleep(0.1)
-        im_cube = self.pushPullIM_cube(self.fsm, maxNumModes=maxNumModes)
+        self.pushPullIM_cube(maxNumModes=maxNumModes)
 
-        weighting_cube = modWeightsFromIMCube(im_cube=im_cube)
-        self.frame_weights[:,:maxNumModes] = weighting_cube
+        weighting_cube = modWeightsFromIMCube(im_cube=self.IM_cube)
+
+        if maxNumModes is None:
+            maxModes = self.numModes
+        if maxNumModes > self.numModes:
+            maxModes = self.numModes
+
+        self.frame_weights[:,:maxModes] = weighting_cube
 
     def loadWeights(self,filename=''):
         self.frame_weights = np.ones((self.numFrames,self.numModes)) / self.numFrames
@@ -164,8 +172,9 @@ class TimeResolvedLoop(Loop):
 
         slopes_TR = self.getTRSlopes()
 
-        currentCorrection = self.wfcShm.read()
-        newCorrection = updateCorrectionTR(correction=currentCorrection, 
+        # Remove this next line because it would grab the current correction AND turbulence applied to the DM 
+        #currentCorrection = self.wfcShm.read()
+        newCorrection = updateCorrectionTR(correction=self.currentCorrection, 
                                            gCM=self.gCM, 
                                            slopes_TR=slopes_TR,
                                            weights=self.frame_weights)
@@ -175,10 +184,15 @@ class TimeResolvedLoop(Loop):
             print(f"Turb : {self.turbModes}")
 
         self.wfcShm.write(newCorrection + self.turbModes)
+        # Instead keep track of the currentCorrection manually instead of fetching from DM 
+        self.currentCorrection = newCorrection
 
 
     def computeIM(self):
         self.pushPullIM_cube()
+        
+        weighting_cube = modWeightsFromIMCube(im_cube=self.IM_cube)
+        self.frame_weights[:,:self.numModes] = weighting_cube
 
         self.IM = np.sum(self.IM_cube * self.frame_weights[np.newaxis, :, :], axis=1)
 
@@ -190,7 +204,7 @@ class TimeResolvedLoop(Loop):
         plt.figure()
         im1 = plt.imshow(self.frame_weights)
         plt.colorbar(im1)
-        plt.title("Measured weights for each modulation frame and KL mode")
+        plt.title("Measured weights \n for each modulation frame and KL mode")
         plt.ylabel("Modulation Frame")
         plt.xlabel("KL mode")
         plt.show()

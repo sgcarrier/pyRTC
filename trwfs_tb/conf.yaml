@@ -5,7 +5,7 @@ wfc:
   serial: "BOL106"
   numActuators: 97
   numModes: 68
-  flatFile: "res/flat_20june2024.npy" 
+  flatFile: "res/flat_31july2024_2.npy" 
   saveFile: "res/save.npy" 
   m2cFile: "res/new_M2C_68_JP_1um_21june.npy" 
   floatingActuatorsFile: "res/floating_actuators.npy"
@@ -28,10 +28,10 @@ dmpsf:
   #width: 128
   #height: 128
   darkCount: 100
-  darkFile: "res/dmpsf_dark_21_06_2024.npy"
+  darkFile: "res/dmpsf_dark.npy"
   modelFile: "res/dmpsf_psfmodel_21_06_2024.npy"
-  integration: 100
-  exposure: 500
+  integration: 10
+  exposure: 1000
   bitDepth: 16
   affinity: 3
   functions:
@@ -48,7 +48,7 @@ modpsf:
   width: 480
   height: 640
   darkCount: 100
-  darkFile: "res/modpsf_dark_29_05_2024.npy"
+  darkFile: "res/modpsf_dark.npy"
   integration: 100
   exposure: 500
   bitDepth: 16
@@ -63,7 +63,7 @@ fsm:
   libFolder: './'
   digitalFreq: 25000 #Hz, fixed from andor
   frequency: 16 #Hz, tuned by user
-  amplitude: 2.0
+  amplitude: 1.8 # 0.6 is 1 lambda/D
   relativeAmplitude: 0.7763 # calculated by user
   numOfTRFrames: 48
   modLambdaFactor: 1
@@ -99,7 +99,7 @@ shwfs:
   name: HASO4
   idx: 0
   #binning: 1 #2
-  exposure: 1000
+  exposure: 40000
   #gain: 0
   #bitDepth: 10
   #left: 416 #208
@@ -156,15 +156,15 @@ slopes:
 
 
 loop:
-  gain: 0.5
-  numDroppedModes: 0
-  pokeAmp: 0.001 #
-  numItersIM: 5
-  affinity: 2
-  method: push-pull
-  #IMFile: "res/IM_20june2024.npy"
-  #IMCubeFile: "res/IM_cube_20june2024.npy"
-  #weightFile : "res/frame_weights_20june2024_norm.npy"
-  functions:
-  - standardIntegratorWithTurbulence
-  #- timeResolvedIntegratorWithTurbulence
+ gain: 0.5
+ numDroppedModes: 0
+ pokeAmp: 0.01 #
+ numItersIM: 5
+ affinity: 2
+ method: push-pull
+ IMFile: "res/IM_2aug2024.npy"
+ IMCubeFile: "res/IM_cube_2aug2024.npy"
+ weightFile : "res/frame_weights_2aug2024.npy"
+ functions:
+ - timeResolvedIntegratorWithTurbulence
+#- standardIntegratorWithTurbulence
