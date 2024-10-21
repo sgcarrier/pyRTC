@@ -152,6 +152,16 @@ slopes:
 #   affinity: 2
 #   method: push-pull
 #   functions:
+#   - standardIntegrator
+
+# loop:
+#   gain: 0.5
+#   numDroppedModes: 0
+#   pokeAmp: 0.01 #
+#   numItersIM: 5
+#   affinity: 2
+#   method: push-pull
+#   functions:
 #   - standardIntegratorWithTurbulence
 
 
@@ -162,9 +172,9 @@ loop:
  numItersIM: 5
  affinity: 2
  method: push-pull
- IMFile: "res/IM_2aug2024.npy"
- IMCubeFile: "res/IM_cube_2aug2024.npy"
- weightFile : "res/frame_weights_2aug2024.npy"
+ #IMFile: "res/IM_2aug2024.npy"
+ #IMCubeFile: "res/IM_cube_2aug2024.npy"
+ #weightFile : "res/frame_weights_2aug2024.npy"
  functions:
  - timeResolvedIntegratorWithTurbulence
 #- standardIntegratorWithTurbulence

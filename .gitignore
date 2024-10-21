@@ -173,4 +173,22 @@ poetry.toml
 # LSP config files
 pyrightconfig.json
 
+# images
+*.png 
+*.jpg
+*.jpeg
+*.pdf
+
+
+# Data
+*.fits
+*.npy
+*.dat
+
+#specific log files
+log_dll_load.txt
+
+# RTC exports
+rtc.html
+
 # End of https://www.toptal.com/developers/gitignore/api/python

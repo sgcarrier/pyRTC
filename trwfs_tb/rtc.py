@@ -168,7 +168,7 @@ plt.colorbar()
 plt.show()
 #%%
 loop.start()
-time.sleep(10)
+time.sleep(5)
 loop.stop()
 print(np.max(np.abs(wfc.currentShape)))
 
