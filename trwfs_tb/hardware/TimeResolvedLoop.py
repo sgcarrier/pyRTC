@@ -29,6 +29,8 @@ class TimeResolvedLoop(Loop):
         self.IMCubeFile = setFromConfig(self.confLoop, "IMCubeFile", "")
 
         self.currentCorrection = np.zeros((self.numModes))
+        self.newCorrection_tmp_delay_1 =  np.zeros((self.numModes))
+        self.signal_TR_ref =  np.zeros((self.signalSize, 48))
 
         self.loadIMCube()
 
@@ -47,7 +49,7 @@ class TimeResolvedLoop(Loop):
 
         if maxNumModes is None:
             maxModes = self.numModes
-        if maxNumModes > self.numModes:
+        elif maxNumModes > self.numModes:
             maxModes = self.numModes
 
         self.frame_weights[:,:maxModes] = weighting_cube
@@ -157,9 +159,21 @@ class TimeResolvedLoop(Loop):
         signal_TR =  np.zeros((self.signalSize, 48))
         for s in range(self.numFrames):
             self.fsm.step()
-            signal_TR[:,s] = self.wfsShm.read()
+            signal_TR[:,s] = self.wfsShm.read() - self.signal_TR_ref[:,s]
         return signal_TR
 
+
+    def grabRefTRSlopes(self):
+        '''
+        Get the slopes for every frame position and use that as the ref slopes
+        '''
+        self.fsm.currentPos = None
+        self.signal_TR_ref =  np.zeros((self.signalSize, 48))
+        for s in range(self.numFrames):
+            self.fsm.step()
+            for i in range(10):
+                self.signal_TR_ref[:,s] += self.wfsShm.read()
+            self.signal_TR_ref[:,s] /= 10
 
 
     def timeResolvedIntegratorWithTurbulence(self):
@@ -171,6 +185,7 @@ class TimeResolvedLoop(Loop):
             self.turbModes = 0
 
         slopes_TR = self.getTRSlopes()
+        self.latest_slopes = slopes_TR
 
         # Remove this next line because it would grab the current correction AND turbulence applied to the DM 
         #currentCorrection = self.wfcShm.read()
@@ -179,14 +194,20 @@ class TimeResolvedLoop(Loop):
                                            slopes_TR=slopes_TR,
                                            weights=self.frame_weights)
         newCorrection[self.numActiveModes:] = 0
-        print(f"Current correction = {newCorrection}")
-        if self.turbulenceGenerator != None:
-            print(f"Turb : {self.turbModes}")
+        self.latest_correction = newCorrection
+        #print(f"Current correction = {newCorrection}")
+        #if self.turbulenceGenerator != None:
+        #    print(f"Turb : {self.turbModes}")
 
-        self.wfcShm.write(newCorrection + self.turbModes)
+        
         # Instead keep track of the currentCorrection manually instead of fetching from DM 
-        self.currentCorrection = newCorrection
+        self.currentCorrection = self.newCorrection_tmp_delay_1
+        self.newCorrection_tmp_delay_1 = newCorrection
+        self.wfcShm.write(self.currentCorrection + self.turbModes)
 
+    def resetCurrentCorrection(self):
+        self.currentCorrection = np.zeros((self.numModes))
+        self.newCorrection_tmp_delay_1 = np.zeros((self.numModes))
 
     def computeIM(self):
         self.pushPullIM_cube()

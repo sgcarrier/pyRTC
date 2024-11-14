@@ -44,7 +44,16 @@ class AndorIXon(WavefrontSensor):
         self.cam.set_exposure(self.exposure)
         return
 
-
+    def sample_image_events(self, original_image, num_events):
+        # Flatten the original image to create a 1D probability distribution
+        flat_image = original_image.flatten()    # Normalize the flattened image to create a probability distribution (sum to 1)
+        prob_dist = flat_image / flat_image.sum()    # Sample indices from the flattened image based on the probability distribution
+        sampled_indices = np.random.choice(len(flat_image), size=num_events, p=prob_dist)    # Create a new image with the same shape as the original, initialized to zeros
+        sampled_image = np.zeros_like(original_image, dtype=int)    # Increment counts in the sampled image based on sampled indices
+        for index in sampled_indices:
+            row, col = np.unravel_index(index, original_image.shape)
+            sampled_image[row, col] += 1    
+        return sampled_image
 
     def expose(self):
         
@@ -64,22 +73,23 @@ class AndorIXon(WavefrontSensor):
         
         data_float = self.data.astype(np.float32)
         
-        #data_no_dark = self.data.astype(self.imageDType) - self.dark 
+        data_no_dark = self.data.astype(self.imageDType) - self.dark 
 
-        #data_no_dark[data_no_dark<0] = 0
+        data_no_dark[data_no_dark<0] = 0
 
 
         if self.total_photon_flux > 0:
-            data_float = (((data_float) / np.sum(data_float) * self.total_photon_flux))
+            data_no_dark = self.sample_image_events(data_no_dark, self.total_photon_flux)
+            #data_no_dark = (((data_no_dark) / np.sum(data_no_dark) * self.total_photon_flux))
 
         if self.activateNoise:
-            data_float = (self.random_state_photon_noise.poisson(data_float))
+            data_no_dark = (self.random_state_photon_noise.poisson(data_no_dark))
 
 
         #super().expose()
         self.imageRaw.write(self.data)
         #Check float here
-        self.image.write(data_float.astype(self.imageDType))
+        self.image.write(data_no_dark.astype(self.imageDType))
 
         return
 

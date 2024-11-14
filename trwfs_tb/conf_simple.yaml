@@ -114,20 +114,6 @@ shwfs:
   - expose
 
 
-#slopes:
-#  type: SHWFS
-#  signalType: slopes
-#  refSlopesFile: ""
-#  validSubApsFile: ""
-#  subApSpacing: 15.4375 
-#  subApOffsetX: 18 #20
-#  subApOffsetY: 16 #17
-#  imageNoise: 0.5
-#  contrast: 20
-#  affinity: 4
-#  functions:
-#  - computeSignal
-
 slopes:
   type: PYWFS
   signalType: slopes
@@ -144,37 +130,15 @@ slopes:
   - computeSignal
 
 
-# loop:
-#   gain: 0.5
-#   numDroppedModes: 0
-#   pokeAmp: 0.01 #
-#   numItersIM: 5
-#   affinity: 2
-#   method: push-pull
-#   functions:
-#   - standardIntegrator
-
-# loop:
-#   gain: 0.5
-#   numDroppedModes: 0
-#   pokeAmp: 0.01 #
-#   numItersIM: 5
-#   affinity: 2
-#   method: push-pull
-#   functions:
-#   - standardIntegratorWithTurbulence
-
-
 loop:
- gain: 0.5
- numDroppedModes: 0
- pokeAmp: 0.01 #
- numItersIM: 5
- affinity: 2
- method: push-pull
- IMFile: "res/IM_07nov2024.npy"
- IMCubeFile: "res/IM_cube_07nov2024.npy"
- weightFile : "res/frame_weights_07nov2024.npy"
- functions:
- - timeResolvedIntegratorWithTurbulence
-#- standardIntegratorWithTurbulence
+  gain: 0.5
+  numDroppedModes: 0
+  pokeAmp: 0.01 #
+  numItersIM: 5
+  affinity: 2
+  method: push-pull
+  functions:
+  - standardIntegrator
+
+
+

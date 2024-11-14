@@ -178,12 +178,14 @@ pyrightconfig.json
 *.jpg
 *.jpeg
 *.pdf
-
+*.gif
+*.webp
 
 # Data
 *.fits
 *.npy
 *.dat
+*.pickle
 
 #specific log files
 log_dll_load.txt
