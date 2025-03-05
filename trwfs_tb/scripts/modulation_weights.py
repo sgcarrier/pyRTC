@@ -14,6 +14,21 @@ def modWeightsFromIMCube(im_cube):
 
     return weighting_cube
 
+def modWeightsFromPushPullRef(push, pull, ref, pokeAmp):
+
+    numFrames =push.shape[1]
+    maxNumModes = push.shape[2]
+    weighting_cube = np.zeros((numFrames, maxNumModes))
+    for i in range(maxNumModes):
+        signal_push = (push[:,:,i]/np.sum(push[:,:,i], axis=0)) - (ref/np.sum(ref))
+        signal_pull = (pull[:,:,i]/np.sum(pull[:,:,i], axis=0)) - (ref/np.sum(ref))
+        total = (signal_push - signal_pull) / (2*pokeAmp)
+        avg_val = np.mean(total, axis=0)
+        weighting_cube[:,i] = np.sqrt(((np.mean((total-avg_val[np.newaxis,:])**2, axis=0))))
+        weighting_cube[:,i] = (weighting_cube[:,i]  / np.sum(np.abs(weighting_cube[:,i])))*numFrames
+
+    return weighting_cube
+
 
 def calcIM_cube(wfc, fsm, loop, maxNumModes=None):
 

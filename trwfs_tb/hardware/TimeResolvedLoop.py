@@ -1,15 +1,17 @@
 from pyRTC.Loop import *
 from scripts.modulation_weights import *
-
+import pickle
 
 @jit(nopython=True)
 def updateCorrectionTR(correction=np.array([], dtype=np.float64), 
                        gCM=np.array([[]], dtype=np.float64),  
                        slopes_TR=np.array([[]], dtype=np.float64),
-                       weights=np.array([[]], dtype=np.float64)):
-    signal_per_mode = slopes_TR @ weights
+                       weights=np.array([[]], dtype=np.float64),
+                       ref_signal_per_mode_normed=np.array([[]], dtype=np.float64),):
+    signal_per_mode = slopes_TR @ weights 
+    signal_per_mode_normed = signal_per_mode / np.sum(signal_per_mode, axis=0)
     #TODO Might be able to optimize this with einsum
-    new_corr = np.diag(gCM.astype(np.float64) @ signal_per_mode)
+    new_corr = np.diag(gCM.astype(np.float64) @ (signal_per_mode_normed - ref_signal_per_mode_normed))
     return correction - new_corr
 
 class TimeResolvedLoop(Loop):
@@ -20,19 +22,29 @@ class TimeResolvedLoop(Loop):
         super().__init__(conf)
 
         self.numFrames  = len(fsm.points)
-        self.weightFile = setFromConfig(self.confLoop, "weightFile", "")
-        self.loadWeights()
+        #self.weightFile = setFromConfig(self.confLoop, "weightFile", "")
+        #self.loadWeights()
 
         self.fsm = fsm
 
         self.IM_cube = np.zeros((self.signalSize, self.numFrames, self.numModes),dtype=self.signalDType)
-        self.IMCubeFile = setFromConfig(self.confLoop, "IMCubeFile", "")
+        self.push_cube = np.zeros((self.signalSize, self.numFrames, self.numModes),dtype=self.signalDType)
+        self.pull_cube = np.zeros((self.signalSize, self.numFrames, self.numModes),dtype=self.signalDType)
+
+        self.push_pull_cube_file = setFromConfig(self.confLoop, "pushPullFile", "")
+
+        
 
         self.currentCorrection = np.zeros((self.numModes))
         self.newCorrection_tmp_delay_1 =  np.zeros((self.numModes))
         self.signal_TR_ref =  np.zeros((self.signalSize, 48))
 
-        self.loadIMCube()
+        self.first_loop = True
+
+        self.ref_signal_per_mode_normed = None
+        self.frame_weights = np.ones((self.numFrames,self.numModes))
+
+        self.loadPushPullCube()
 
     def calcFrameWeights(self, maxNumModes=None):
         '''
@@ -77,6 +89,35 @@ class TimeResolvedLoop(Loop):
         self.IM = np.sum(self.IM_cube * self.frame_weights[np.newaxis, :, :], axis=1)
 
         self.computeCM()
+
+    def saveIMCube(self, filename):
+         data = {"push": self.push_cube,
+                 "pull": self.pull_cube,
+                 "ref" : self.ref_slopes,
+                 "pokeAmp": self.pokeAmp,
+                 "weights": self.frame_weights}
+         with open(filename, 'wb') as f: 
+              pickle.dump(data, f)
+
+    def loadPushPullCube(self,filename=''):
+        if filename == '':
+            filename = self.push_pull_cube_file
+        if filename != '':
+            with open(filename, 'rb') as f: 
+                data = pickle.load(f)
+                self.push_cube = data["push"]
+                self.pull_cube = data["pull"]
+                self.ref_slopes = data["ref"]
+                self.pokeAmp = data["pokeAmp"]
+                self.frame_weights = data["weights"]
+
+            self.makeIM(self.push_cube,
+                        self.pull_cube,  
+                        self.ref_slopes,
+                        self.pokeAmp,
+                        self.frame_weights)
+
+            self.computeCM()
 
     def pushPullIM_cube(self, maxNumModes=None):
 
@@ -150,6 +191,81 @@ class TimeResolvedLoop(Loop):
 
         return
 
+    def pushPullRef_cube(self, maxNumModes=None):
+
+        numModFrames = len(self.fsm.points)
+
+        if maxNumModes is None:
+            maxNumModes = self.numModes
+        if maxNumModes > self.numModes:
+            maxNumModes = self.numModes
+
+        self.ref_slopes = np.zeros((self.signalSize, self.numFrames))
+        self.fsm.stop()
+        self.fsm.resetPos()
+
+        for s in range(self.numFrames):
+            self.fsm.step()
+            #Average out N new WFS frames
+            self.ref_slopes[:,s] =  np.zeros((self.signalSize))
+            for n in range(self.numItersIM):
+                self.ref_slopes[:,s] += self.wfsShm.read()
+            self.ref_slopes[:,s] /= self.numItersIM
+
+        #For each mode
+        for i in range(maxNumModes):
+            #Reset the correction
+            correction = self.flat.copy()
+            #Plus amplitude
+            correction[i] = self.pokeAmp
+            #Post a new shape to be made
+            self.wfcShm.write(correction)
+            #Add some delay to ensure one-to-one
+            time.sleep(self.hardwareDelay)
+            #Burn the first new image since we were moving the DM during the exposure
+            self.wfsShm.read()
+
+            self.fsm.currentPos = None
+            self.tmp_plus =  np.zeros((self.signalSize, self.numFrames))
+            for s in range(self.numFrames):
+                self.fsm.step()
+                #Average out N new WFS frames
+                for n in range(self.numItersIM):
+                    self.tmp_plus[:,s] += self.wfsShm.read()
+                self.tmp_plus[:,s] /= self.numItersIM
+
+
+                #tmp_plus[:,s] = tmp_plus[:,s] - ref_slopes[:,s]
+
+            #minus amplitude
+            correction[i] = -self.pokeAmp
+            #Post a new shape to be made
+            self.wfcShm.write(correction)
+            #Add some delay to ensure one-to-one
+            time.sleep(self.hardwareDelay)
+            #Burn the first new image since we were moving the DM during the exposure
+            self.wfsShm.read()
+
+            self.fsm.currentPos = None
+            self.tmp_minus =  np.zeros((self.signalSize, self.numFrames))
+            for s in range(self.numFrames):
+                self.fsm.step()
+                #Average out N new WFS frames
+                for n in range(self.numItersIM):
+                    self.tmp_minus[:,s] += self.wfsShm.read()
+                self.tmp_minus[:,s] /= self.numItersIM
+
+                #self.tmp_minus[:,s] = self.tmp_minus[:,s] - self.ref_slopes[:,s]
+
+
+            #Compute the normalized difference
+            #self.IM_cube[:,:,i] = (tmp_plus-tmp_minus)/(2*self.pokeAmp)
+
+            self.push_cube[:,:,i] = self.tmp_plus
+            self.pull_cube[:,:,i] = self.tmp_minus
+
+        return
+
 
     def getTRSlopes(self):
         '''
@@ -184,42 +300,93 @@ class TimeResolvedLoop(Loop):
         else:
             self.turbModes = 0
 
-        slopes_TR = self.getTRSlopes()
-        self.latest_slopes = slopes_TR
+        if self.first_loop:
+            slopes_TR = self.getTRSlopes()
+            self.latest_slopes = slopes_TR
+            self.latest_slopes_delay_1 = slopes_TR
+            self.latest_slopes_delay_2 = slopes_TR
+            self.first_loop = False
 
         # Remove this next line because it would grab the current correction AND turbulence applied to the DM 
         #currentCorrection = self.wfcShm.read()
-        newCorrection = updateCorrectionTR(correction=self.currentCorrection, 
-                                           gCM=self.gCM, 
-                                           slopes_TR=slopes_TR,
-                                           weights=self.frame_weights)
+        if self.ref_signal_per_mode_normed is not None:
+            newCorrection = updateCorrectionTR(correction=self.currentCorrection, 
+                                            gCM=self.gCM, 
+                                            slopes_TR=self.latest_slopes,
+                                            weights=self.frame_weights,
+                                            ref_signal_per_mode_normed = self.ref_signal_per_mode_normed)
+        else:
+            print("Error: weighted ref signal never defined, skipping loop")
+            return
         newCorrection[self.numActiveModes:] = 0
         self.latest_correction = newCorrection
         #print(f"Current correction = {newCorrection}")
         #if self.turbulenceGenerator != None:
         #    print(f"Turb : {self.turbModes}")
 
+        slopes_TR = self.getTRSlopes()
+        self.latest_slopes = self.latest_slopes_delay_2
+        self.latest_slopes_delay_2 = self.latest_slopes_delay_1
+        self.latest_slopes_delay_1 = slopes_TR
         
         # Instead keep track of the currentCorrection manually instead of fetching from DM 
-        self.currentCorrection = self.newCorrection_tmp_delay_1
-        self.newCorrection_tmp_delay_1 = newCorrection
+        #self.currentCorrection = self.newCorrection_tmp_delay_1
+        #self.newCorrection_tmp_delay_1 = newCorrection
+
+        if np.isnan(newCorrection).any(): 
+            self.currentCorrection = self.currentCorrection # dont change correction due to nan 
+        else:
+            self.currentCorrection = newCorrection # Safe to update
         self.wfcShm.write(self.currentCorrection + self.turbModes)
 
     def resetCurrentCorrection(self):
         self.currentCorrection = np.zeros((self.numModes))
         self.newCorrection_tmp_delay_1 = np.zeros((self.numModes))
+        self.first_loop = True
+
+
+    def makeIM(self, push, pull, ref, poke, weights):
+        self.IM       = np.zeros((self.signalSize, self.numModes),dtype=self.signalDType)
+        push_weighted = np.sum(push * weights[np.newaxis, :, :], axis=1)
+        pull_weighted = np.sum(pull * weights[np.newaxis, :, :], axis=1)
+        ref_weighted  = ref @ weights
+        for mode in range(self.numModes):
+            push_signal      = ((push_weighted[:,mode]/np.sum(push_weighted[:,mode])) - (ref_weighted[:,mode]/np.sum(ref_weighted[:,mode])))
+            pull_signal      = ((pull_weighted[:,mode]/np.sum(pull_weighted[:,mode])) - (ref_weighted[:,mode]/np.sum(ref_weighted[:,mode])))
+            self.IM[:,mode]  = (push_signal - pull_signal) / (2*poke)
+
+        self.ref_signal_per_mode_normed = (ref_weighted ) / np.sum(ref_weighted, axis=0)
 
     def computeIM(self):
-        self.pushPullIM_cube()
+        self.pushPullRef_cube()
         
-        weighting_cube = modWeightsFromIMCube(im_cube=self.IM_cube)
+        weighting_cube = modWeightsFromPushPullRef(self.push_cube,
+                                                   self.pull_cube,  
+                                                   self.ref_slopes,
+                                                   self.pokeAmp)
+
+        #weighting_cube = modWeightsFromIMCube(im_cube=self.IM_cube)
         self.frame_weights[:,:self.numModes] = weighting_cube
 
-        self.IM = np.sum(self.IM_cube * self.frame_weights[np.newaxis, :, :], axis=1)
+        self.makeIM(self.push_cube,
+                    self.pull_cube,  
+                    self.ref_slopes,
+                    self.pokeAmp,
+                    self.frame_weights)
 
         self.computeCM()
         return
 
+    def changeWeightsAndUpdate(self, newWeights):
+        self.frame_weights[:,:self.numModes] = newWeights
+
+        self.makeIM(self.push_cube,
+                    self.pull_cube,  
+                    self.ref_slopes,
+                    self.pokeAmp,
+                    self.frame_weights)
+
+        self.computeCM()
 
     def plotWeights(self):
         plt.figure()

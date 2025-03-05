@@ -22,11 +22,17 @@ class AndorIXon(WavefrontSensor):
 
         self.total_photon_flux = 0
         self.activateNoise = False
+        self.activateRONoise = False
 
         self.random_state_photon_noise = np.random.default_rng(seed=int(time.time()))
+        self.random_state_readout_noise = np.random.RandomState(seed=int(time.time()))
 
         if "exposure" in conf:
             self.setExposure(conf["exposure"])
+        if "binning" in conf:
+            self.setBinning(conf["binning"])
+        else:
+            self.setBinning(None)
 
     def open_shutter(self):
         self.cam.setup_shutter("open")
@@ -62,7 +68,11 @@ class AndorIXon(WavefrontSensor):
         #    time.sleep(0.1)
 
         img_raw = self.cam.snap()
-        self.img = img_raw
+
+        if self.binning:
+            self.img = self.bin2d(img_raw, self.binning).astype("uint16")
+        else:
+            self.img = img_raw
         
         self.data = np.ndarray((self.img.shape[0],self.img.shape[1]), 
                                buffer= self.img, 
@@ -79,12 +89,17 @@ class AndorIXon(WavefrontSensor):
 
 
         if self.total_photon_flux > 0:
-            data_no_dark = self.sample_image_events(data_no_dark, self.total_photon_flux)
-            #data_no_dark = (((data_no_dark) / np.sum(data_no_dark) * self.total_photon_flux))
+            #data_no_dark = self.sample_image_events(data_no_dark, self.total_photon_flux)
+            if np.sum(data_no_dark) != 0:
+                data_no_dark = (((data_no_dark) / np.sum(data_no_dark) * self.total_photon_flux))
 
         if self.activateNoise:
             data_no_dark = (self.random_state_photon_noise.poisson(data_no_dark))
 
+        if self.activateRONoise:
+            noise = np.int64(np.round(self.random_state_readout_noise.randn(data_no_dark.shape[0], data_no_dark.shape[1])*0.5))
+            noise[noise<0] = 0
+            data_no_dark += noise
 
         #super().expose()
         self.imageRaw.write(self.data)
@@ -92,6 +107,14 @@ class AndorIXon(WavefrontSensor):
         self.image.write(data_no_dark.astype(self.imageDType))
 
         return
+    
+    """
+    Do the binning k of a 2d array a. 
+    """
+    def bin2d(self, a,k):
+        rows = a.shape[0] // k
+        cols = a.shape[1] // k
+        return a.reshape(rows, k, cols, k).sum(3).sum(1)
 
     def __del__(self):
         super().__del__()

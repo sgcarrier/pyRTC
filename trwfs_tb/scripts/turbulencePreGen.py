@@ -9,7 +9,11 @@ class DummyAtm():
         self.maxPos = self.atm.shape[0]
         self.mask = self.genMask(11)
         self.currentPos = None
+        self.speed = 1
 
+
+    def setSpeed(self, newSpeed):
+        self.speed = newSpeed
     
     def getNextTurbAsModes(self):
         if self.currentPos is None:
@@ -17,7 +21,7 @@ class DummyAtm():
         elif self.currentPos >= self.maxPos:
             self.currentPos = 0
         else:
-            self.currentPos += 1
+            self.currentPos += int(1 * self.speed)
         
         return self.atm[self.currentPos,:]
     

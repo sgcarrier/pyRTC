@@ -90,12 +90,12 @@ wfs.setExposure(0.0625)
 #%%
 ################### Start modulation ###################
 fsm.start()
-dmpsf.setExposure(1000)
+#dmpsf.setExposure(1000)
 
 #%%
 ################### Stop modulation ###################
 fsm.stop()
-dmpsf.setExposure(500)
+#dmpsf.setExposure(500)
 
 
 #%%
@@ -169,7 +169,7 @@ time.sleep(1)
 wfs.close_camera()
 time.sleep(1)
 
-wfc.stop()
+wfc.stop() 
 
 time.sleep(1)
 slope.stop()
@@ -178,3 +178,5 @@ time.sleep(1)
 dmpsf.stop()
 
 
+
+# %%

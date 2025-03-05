@@ -53,11 +53,11 @@ from skimage import io, color, measure, draw, img_as_bool
 import numpy as np
 from scipy import optimize
 
-def findPupilPosAndRadius(img):
+def findPupilPosAndRadius(img, size):
     # img_bin = np.zeros(img.shape) 
     # img_bin[img>(np.max(img)*0.1)] = 1
     img_bin = img
-    image = img_bin[:64,:64]
+    image = img_bin[:size,:size]
     regions = measure.regionprops(measure.label(image))
     bubble = regions[0]
 
@@ -75,19 +75,19 @@ def findPupilPosAndRadius(img):
     print(( x0, y0, r))
     return int(np.round(x0)), int(np.round(y0)), int(np.round(r))
 
-def findAllPupils(img):
+def findAllPupils(img, quadrant_size):
     pos = []
-    x0, y0, r0 = findPupilPosAndRadius(img[:64,:64])
+    x0, y0, r0 = findPupilPosAndRadius(img[:quadrant_size,:quadrant_size], quadrant_size)
     pos.append((x0, y0, r0))
-    x1, y1, r1 = findPupilPosAndRadius(img[64:,:64])
-    y1 += 64
+    x1, y1, r1 = findPupilPosAndRadius(img[quadrant_size:,:quadrant_size], quadrant_size)
+    y1 += quadrant_size
     pos.append((x1, y1, r1))
-    x2, y2, r2 = findPupilPosAndRadius(img[:64,64:])
-    x2 += 64
+    x2, y2, r2 = findPupilPosAndRadius(img[:quadrant_size,quadrant_size:], quadrant_size)
+    x2 += quadrant_size
     pos.append((x2, y2, r2))
-    x3, y3, r3 = findPupilPosAndRadius(img[64:,64:])
-    x3 += 64
-    y3 += 64
+    x3, y3, r3 = findPupilPosAndRadius(img[quadrant_size:,quadrant_size:], quadrant_size)
+    x3 += quadrant_size
+    y3 += quadrant_size
     pos.append((x3, y3, r3))
 
     return pos
@@ -128,7 +128,7 @@ def displayOffset(img, pupilLocs):
     print(f"xsum = {x_sum}, ysum={y_sum}")
 
     
-def autoFindAndDisplayPupils(wfs):
+def autoFindAndDisplayPupils(wfs, quadrant_size):
 
     numImages = 20
     img = wfs.read().astype(np.float64)
@@ -137,8 +137,8 @@ def autoFindAndDisplayPupils(wfs):
     img /= numImages
 
     img_bin = np.zeros(img.shape)
-    img_bin[img>(np.max(img)*0.1)] = 1
-    pos = findAllPupils(img_bin)
+    img_bin[img>(np.max(img)*0.3)] = 1
+    pos = findAllPupils(img_bin, quadrant_size)
     print(pos)
     # pos[0] = (pos[0][0], pos[0][1],pos[0][2]+1)
     # pos[1] = (pos[1][0], pos[1][1],pos[1][2]+1)

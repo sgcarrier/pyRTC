@@ -5,6 +5,7 @@ from hardware.PIE517Modulator import PIE517Modulator
 from hardware.PGScienceCam import *
 from hardware.HASO_SH import HASO_SH
 from pyRTC.SlopesProcess import SlopesProcess
+from hardware.FullFrameProcess import FullFrameProcess
 from pyRTC.Loop import *
 
 from hardware.TimeResolvedLoop import *
@@ -87,21 +88,232 @@ wfs.open_shutter()
 wfs.start()
 wfs.setExposure(0.0625)
 
+
+#%%
+pos = {"A": 3, "B": 3}
+fsm.goTo(pos)
+time.sleep(1)
+img_q1 = wfs.read().astype(np.float64)
+time.sleep(1)
+fsm.resetPos()
+time.sleep(1)
+pos = {"A": 7, "B": 3}
+fsm.goTo(pos)
+time.sleep(1)
+img_q2 = wfs.read().astype(np.float64)
+time.sleep(1)
+fsm.resetPos()
+time.sleep(1)
+pos = {"A": 7, "B": 7}
+fsm.goTo(pos)
+time.sleep(1)
+img_q3 = wfs.read().astype(np.float64)
+time.sleep(1)
+fsm.resetPos()
+time.sleep(1)
+pos = {"A": 3, "B": 7}
+fsm.goTo(pos)
+time.sleep(1)
+img_q4 = wfs.read().astype(np.float64)
+time.sleep(1)
+fsm.resetPos()
+
+#%%
+img_high_mod = img_q1 + img_q2 + img_q3 + img_q4
+img_high_mod_bin = np.zeros(img_high_mod.shape)
+img_high_mod_bin[img_high_mod>(np.max(img_high_mod)*0.02)] = 1
+
+#%%
+pos_ret = findAllPupils2(img_high_mod_bin, quadrant_size=16)
+
+
+#%%
+f, ax = plt.subplots()
+pos_ret = [(5, 5, 5), (5, 26, 5), (26, 5, 5), (27, 26, 5)]
+ax.imshow(img_high_mod, cmap='gray', interpolation='nearest')
+for i in range(4):
+    cir = plt.Circle((pos_ret[i][0], pos_ret[i][1]), pos_ret[i][2], color='red', fill=False)
+    ax.add_artist(cir)
+
+displayOffset(img_high_mod_bin, pos_ret)
+plt.show()
+#%%
+def displayOffsetnoshow(params):
+    p0_x, p0_y, p1_x, p1_y, p2_x, p2_y, p3_x, p3_y = params
+    pupilLocs = [(np.round(p0_x), np.round(p0_y), radius_pupil), (np.round(p1_x), np.round(p1_y), radius_pupil), (np.round(p2_x), np.round(p2_y), radius_pupil), (np.round(p3_x), np.round(p3_y), radius_pupil)]
+    pupils = []
+    pupilMask = np.zeros(img.shape)
+    xx,yy = np.meshgrid(np.arange(pupilMask.shape[0]),np.arange(pupilMask.shape[1]))
+    for i, pupil_loc in enumerate(pupilLocs):
+        px, py, r = pupil_loc
+        zz = np.sqrt((xx-px)**2 + (yy-py)**2)
+        pupils.append(zz < r)
+        pupilMask += pupils[-1]*(i+1)
+    p1mask = pupilMask == 1
+    p2mask = pupilMask == 2
+    p3mask = pupilMask == 3
+    p4mask = pupilMask == 4
+
+    xx,yy = np.meshgrid(np.arange(2*r),np.arange(2*r))
+    zz = np.sqrt((xx-r)**2 + (yy-r)**2)
+    p1image = np.zeros((2*r,2*r))
+    p2image = np.zeros((2*r,2*r))
+    p3image = np.zeros((2*r,2*r))
+    p4image = np.zeros((2*r,2*r))
+    p1image[zz<r] = img_bin[p1mask]
+    p2image[zz<r] = img_bin[p2mask]
+    p3image[zz<r] = img_bin[p3mask]
+    p4image[zz<r] = img_bin[p4mask]
+    #x_slopes = (p1 + p2) - (p3 + p4)
+    #y_slopes = (p1 + p3) - (p2 + p4)
+    x_sum = np.sum(np.abs(((p1image + p2image) - (p3image + p4image))))
+    y_sum = np.sum(np.abs(((p1image + p3image) - (p2image + p4image))))
+    return x_sum+ y_sum
+
+#%%
+img = img_high_mod
+img_bin = img_high_mod_bin
+radius_pupil = 5
+pos_init  = [4, 5, 5, 27, 26, 5, 26, 26]
+for pos in range(8):
+    for i in [-1, 0, 1]:
+        cur_pos = pos_init
+        cur_pos[pos] += i
+        ret_val= displayOffsetnoshow(tuple(cur_pos))
+        print(f"val={ret_val}, with pos = {cur_pos}")
 #%%
 ################### Start modulation ###################
 fsm.start()
-dmpsf.setExposure(1000)
+#dmpsf.setExposure(1000)
 
 #%%
 ################### Stop modulation ###################
 fsm.stop()
-dmpsf.setExposure(500)
+#dmpsf.setExposure(500)
 
 
 #%%
 ################### Pupil positioning ###################
 from scripts.pupilMask import *
-pupil_pos = autoFindAndDisplayPupils(wfs)
+
+def findPupilPosAndRadius_forced_radius(img, size, r_forced=5):
+    # img_bin = np.zeros(img.shape) 
+    # img_bin[img>(np.max(img)*0.1)] = 1
+    img_bin = img
+    image = img_bin[:size,:size]
+    regions = measure.regionprops(measure.label(image))
+    bubble = regions[0]
+
+    y0, x0 = bubble.centroid
+    r = r_forced
+
+    def cost(params):
+        x0, y0 = params
+        coords = draw.disk((np.round(y0), np.round(x0)), r, shape=image.shape)
+        template = np.zeros_like(image)
+        template[coords] = 1
+        return -np.sum(template == image)
+
+    x0, y0 = optimize.fmin(cost, (x0, y0))
+    print(( x0, y0, r_forced))
+    return int(np.round(x0)), int(np.round(y0)), int(r_forced)
+
+def findAllPupils2(img, quadrant_size):
+    pos = []
+    x0, y0, r0 = findPupilPosAndRadius_forced_radius(img[:quadrant_size,:quadrant_size], quadrant_size)
+    pos.append((x0, y0, r0))
+    x1, y1, r1 = findPupilPosAndRadius_forced_radius(img[quadrant_size:,:quadrant_size], quadrant_size)
+    y1 += quadrant_size
+    pos.append((x1, y1, r1))
+    x2, y2, r2 = findPupilPosAndRadius_forced_radius(img[:quadrant_size,quadrant_size:], quadrant_size)
+    x2 += quadrant_size
+    pos.append((x2, y2, r2))
+    x3, y3, r3 = findPupilPosAndRadius_forced_radius(img[quadrant_size:,quadrant_size:], quadrant_size)
+    x3 += quadrant_size
+    y3 += quadrant_size
+    pos.append((x3, y3, r3))
+
+    return pos
+#%%
+def autoFindAndDisplayPupils2(wfs, quadrant_size):
+
+    numImages = 20
+    img = wfs.read().astype(np.float64)
+    for i in range(numImages-1):
+        img += wfs.read().astype(np.float64)
+    img /= numImages
+
+    img_bin = np.zeros(img.shape)
+    img_bin[img>(np.max(img)*0.04)] = 1
+    plt.imshow(img_bin)
+    plt.colorbar()
+    pos = findAllPupils2(img_bin, quadrant_size)
+    print(pos)
+
+    displayOffset(img_bin, pos)
+
+    print(pos)
+    f, ax = plt.subplots()
+    ax.imshow(img_bin, cmap='gray', interpolation='nearest')
+    for i in range(4):
+        cir = plt.Circle((pos[i][0], pos[i][1]), pos[i][2], color='red', fill=False)
+        ax.add_artist(cir)
+    plt.show()
+
+    return pos
+
+
+pupil_pos = autoFindAndDisplayPupils2(wfs, quadrant_size=16)
+
+#%%
+numImages = 20
+img = wfs.read().astype(np.float64)
+for i in range(numImages-1):
+    img += wfs.read().astype(np.float64)
+img /= numImages
+
+img_bin = np.zeros(img.shape)
+img_bin[img>(np.max(img)*0.05)] = 1
+
+
+#%%
+import scipy
+quads = np.zeros((4, 64, 64))
+quads[0,:,:] = img_bin[0:64,0:64]
+quads[1,:,:] = img_bin[64:, 0:64]
+quads[2,:,:] = img_bin[0:64, 64:]
+quads[3,:,:] = img_bin[64:, 64:]
+
+avg_offset = np.zeros((4, 4, 2))
+for q in range(4):
+    for i in range(4):
+        co = scipy.signal.convolve(quads[q,:,:], quads[i,:,:], mode="same", method="direct")
+        center = np.unravel_index(co.argmax(axis=None), co.shape)
+        avg_offset[q,i,:] += [center[0], center[1]]
+
+plt.imshow(co)
+print(avg_offset)
+
+#TODO prob need to substract 64/2 from offsets found
+#%%
+
+#  - 11,11 #22,20 # 21,22
+#  - 53,11 #107,20 #  106,22
+#  - 10,53 #22,105 # 21,107
+#  - 53,54 #107,106 # 106,107
+pos[0] = (22, 22, 17)
+pos[2] = (23, 106, 17)
+pos[1] = (107, 21, 17)
+pos[3] = (108, 106, 17)
+
+
+f, ax = plt.subplots()
+ax.imshow(img, cmap='gray', interpolation='nearest')
+for i in range(4):
+    cir = plt.Circle((pos[i][0], pos[i][1]), pos[i][2], color='red', fill=False)
+    ax.add_artist(cir)
+plt.show()
+displayOffset(img, pos)
 
 #%%
 for i in range(48):
@@ -110,7 +322,9 @@ for i in range(48):
 
 #%% 
 ################### Calculate slopes ################### 
-slope = SlopesProcess(conf=conf)
+#slope = SlopesProcess(conf=conf)
+slope = FullFrameProcess(conf=conf)
+#slope.takeRefFullFrame()
 slope.start()
 
 
@@ -126,6 +340,7 @@ loop = TimeResolvedLoop(conf=conf, fsm=fsm)
 
 #loop.grabRefTRSlopes()
 #%%
+#loop.computeIM()
 loop.calcFrameWeights()
 
 #%%
@@ -143,6 +358,7 @@ loop.plotWeights()
 ################### Compute Interaction Matrix ###################
 loop.computeIM()
 wfc.flatten()
+
 
 #%%
 ################### Plot SVD modes ###################
@@ -169,8 +385,10 @@ plt.colorbar()
 plt.show()
 #%%
 loop.start()
-time.sleep(1)
+time.sleep(5)
 loop.stop()
+saved_cc = wfc.currentCorrection
+print(saved_cc)
 print(np.max(np.abs(wfc.currentShape)))
 
 #%%
@@ -232,11 +450,16 @@ def grabHASOCoeffs(camera, confSHWFS, coeffs):
 #%%
 wfs.activateNoise = False
 wfs.total_photon_flux = 0
+wfs.activateRONoise = False
 loop.turbulenceGenerator = None
 time.sleep(1)
-for i in range(10):
+for i in range(5):
     loop.timeResolvedIntegratorWithTurbulence()
     time.sleep(0.1)
+
+#%%
+wfc.flatten()
+loop.resetCurrentCorrection()
 
 
 #%%
@@ -278,7 +501,7 @@ for i in range(NUM_MODES):
     push_coeff = grabHASOCoeffs(camera, confSHWFS, NUM_MODES)
     #push_coeff -= REF_coeff
 
-    time.sleep(1)
+    time.sleep(0.5)
 
     wfc.push(i, -poke_amp)
     #Add some delay to ensure one-to-one
@@ -290,7 +513,7 @@ for i in range(NUM_MODES):
 
     #Compute the normalized difference
     HASO_resp[i,:] = (push_coeff-pull_coeff)/(2*poke_amp)
-
+    time.sleep(0.5)
 
 #%%
 plt.imshow(HASO_resp, cmap = 'inferno', aspect='auto')
@@ -300,16 +523,29 @@ plt.show()
 wfc.flatten()
 loop.resetCurrentCorrection()
 
+
+#%%
+modal_gain = np.ones(68) *0.2
+modal_gain[0] = 0.3
+modal_gain[1] = 0.3
+loop.gain = modal_gain
+loop.gCM = loop.gain[:, np.newaxis]*loop.CM
+
 #%%
 ################### Turbulence ###################
 from scripts.turbulencePreGen import *
 turb = np.load("res/turb_coeff_Jun21_with_floating.npy")
 
 
-turb /= 1
+turb *= 1
 turb_no_piston = turb[:,1:]
 turb_no_piston_first_5_modes = turb_no_piston
-#turb_no_piston_first_5_modes[:, 1:] = 0
+
+# Remove some modes if needed
+MODES_TO_USE = 30
+turb_no_piston_first_5_modes[:, MODES_TO_USE:] = 0
+loop.numActiveModes = MODES_TO_USE
+
 atm = DummyAtm(turb_no_piston_first_5_modes)
 
 t = atm.getNextTurbAsModes()
@@ -349,9 +585,9 @@ def animate(i):
     img.set_clim(np.min(phase_screen), np.max(phase_screen))
     ann.set_text(str(i))
 
-anim = animation.FuncAnimation(fig, animate, frames= 100*10, interval=1000/10)
+anim = animation.FuncAnimation(fig, animate, frames= 100, interval=1000/10)
 
-anim.save("test_anime.gif", fps=10)
+anim.save("test_anime3.gif", fps=10)
 
 #%% Animate with atmo
 import matplotlib.animation as animation
@@ -377,15 +613,18 @@ wfc.flatten()
 loop.resetCurrentCorrection()
 anim.save("atmo.gif", fps=10)
 #%%
-
+atm.setSpeed(3)
 loop.setTurbulenceGenerator(atm)
 
 
 #%%
 wfs.activateNoise = True
-wfs.total_photon_flux = 10
+wfs.activateRONoise = False
+wfs.total_photon_flux = 20
 #%%
-iterations = 100
+fsm.stop()
+fsm.currentPos = None
+iterations = 200
 loop.setGain(0.3)
 strehls = np.zeros(iterations)
 rms_plot = np.zeros(iterations)
@@ -431,7 +670,7 @@ for i in range(iterations):
     coeffs_in_KL_space[i,:] = HASO_resp_inv @ saved_coeffs[i, :]
 
 
-saveFilename = f"norm_low_photon_{wfs.total_photon_flux*48}photons_{loop.gain}g.pickle"
+saveFilename = f"tr_2KL_very_low_photon_14feb25_new_noise{wfs.total_photon_flux*48}photons_{loop.gain}g.pickle"
 data = {"REF_coeff":REF_coeff,
         "saved_coeffs":saved_coeffs,
         "current_wfc_shape":current_wfc_shape,
@@ -622,31 +861,44 @@ for i in range(NUM_MODES):
 plt.plot(rms_for_each_modes)
 
 #%%
-plt.plot(rms_plot_norm_10*1000, label="Normal")
-plt.plot(rms_plot_tr_10*1000, label="TR")
+fig,ax=plt.subplots()
+plt.plot(rms_plot_norm_50_03g_30KL_3xspeed*1000, "r-", label=f"Normal - {50*48} photons - G=0.3")
+plt.plot(rms_plot_norm_20_03g_30KL_3xspeed*1000, "k--", label=f"Normal - {20*48} photons - G=0.3")
+plt.plot(rms_plot_tr_50_03g_30KL_3xspeed*1000, "b-" , label=f"TR - {50*48} photons - G=0.3")
+#plt.plot(rms_plot_tr_10_03_5xspeed*1000, "b--",label="TR - 2400 photons - G=0.3")
 plt.xlabel("Loop cycles")
 plt.ylabel("RMS (nm)")
-plt.title(f"Wavefront RMS in closed loop \n {wfs.total_photon_flux*48} photons. 68 KL Modes, {loop.gain} loop gain")
+plt.title(f"Wavefront RMS in closed loop 3x speed turbulence \n 30 KL of turb/corr, reduced pupil")
+# Major ticks every 20, minor ticks every 5
+major_ticks = np.arange(0, 1000, 100)
+minor_ticks = np.arange(0, 1000, 50)
+ax.set_yticks(major_ticks)
+ax.set_yticks(minor_ticks, minor=True)
+
+# And a corresponding grid
+ax.grid(which='both')
+
 plt.legend()
 
 #%%
-norm_data_file = "norm_low_photon_480photons_0.3g.pickle"
-tr_data_file = "tr_low_photon_480photons_0.5g.pickle"
+norm_data_file = "norm_low_photon_7feb25_alt_480photons_0.2g.pickle"
+tr_data_file = "tr_low_photon_7feb25_alt_480photons_0.3g.pickle"
 
 with open(norm_data_file, 'rb') as handle:
     loaded_data_norm = pickle.load(handle)
+#rms_plot_norm = np.mean(loaded_data_norm["coeffs_in_KL_space"][50:,:]**2, axis=0)
 rms_plot_norm = loaded_data_norm["rms_plot"]
-
 
 with open(tr_data_file, 'rb') as handle:
     loaded_data_tr = pickle.load(handle)
+#rms_plot_tr = np.mean(loaded_data_tr["coeffs_in_KL_space"][50:,:]**2, axis=0)
 rms_plot_tr = loaded_data_tr["rms_plot"]
-cutoff = 30
+cutoff = 50
 plt.plot(rms_plot_norm*1000, label=f"Normal {np.mean(rms_plot_norm[cutoff:])}")
 plt.plot(rms_plot_tr*1000, label=f"TR {np.mean(rms_plot_tr[cutoff:])}")
 plt.xlabel("Loop cycles")
 plt.ylabel("RMS (nm)")
-plt.title(f"Wavefront RMS in closed loop \n {wfs.total_photon_flux*48} photons. 68 KL Modes, {loop.gain} loop gain")
+plt.title(f"Wavefront RMS in closed loop \n {wfs.total_photon_flux*48} photons. 5 KL Modes or turbulence and correction, 0.3 loop gain")
 plt.legend()
 #%%
 wfc.flatten()
@@ -654,7 +906,7 @@ loop.resetCurrentCorrection()
 
 
 #%%
-loop.frame_weights = np.ones(loop.frame_weights.shape)/48
+loop.frame_weights = np.ones(loop.frame_weights.shape)
 loop.IM = np.sum(loop.IM_cube * loop.frame_weights[np.newaxis, :, :], axis=1)
 loop.computeCM()
 #%%
@@ -790,10 +1042,11 @@ np.save("res/turb_coeff_Jun21_with_floating.npy", data)
 
 #%%
 wfs.activateNoise = True
-wfs.total_photon_flux = 25
+wfs.activateRONoise = False
+wfs.total_photon_flux = 200
 #%%
 fsm.currentPos = None
-image = slope.readImage()
+image = slope.readImage() #slope.signal2D.read() #slope.readImage()
 signal_TR =  np.zeros((image.shape[0], image.shape[1], 48))
 for s in range(fsm.numOfTRFrames):
     fsm.step()

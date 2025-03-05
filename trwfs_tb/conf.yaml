@@ -5,9 +5,10 @@ wfc:
   serial: "BOL106"
   numActuators: 97
   numModes: 68
-  flatFile: "res/flat_07nov2024_2.npy" 
+  flatFile: "res/flat_10feb2025.npy" 
   saveFile: "res/save.npy" 
   m2cFile: "res/new_M2C_68_JP_1um_21june.npy" 
+  #m2cFile: "res/M2C_POKE_69.npy" #For poking
   floatingActuatorsFile: "res/floating_actuators.npy"
   floatingInfluenceRadius: 1
   affinity: 5
@@ -80,16 +81,16 @@ fsm:
 wfs:
   name: ANDOR_IXON
   idx: 0
-  #binning: 1 #2
+  binning: 4 #1
   exposure: 0.01
   #gain: 0
   #bitDepth: 10
   #left: 416 #208
   #top: 280 #140
-  width: 128
-  height: 128 
+  width: 32 # 128 #128
+  height: 32 #128 #128
   darkCount: 1000
-  darkFile: "res/andor_dark.npy"
+  darkFile: "res/andor_dark_4bin.npy"
   affinity: 3
   functions:
   - expose
@@ -133,13 +134,14 @@ slopes:
   signalType: slopes
   affinity: 4
   flatNorm: True
+  binning: 2
   #Specify where the pupils are and how large for a PYWFS
-  pupilsRadius: 17
+  pupilsRadius: 5 #17 #17 #4 #9 #15 #17 # 9
   pupils:
-  - 22,20 # 21,22
-  - 107,20 #  106,22
-  - 22,105 # 21,107
-  - 107,106 # 106,107
+  - 5,5 #22,20 #5,5 #10,11 #11,11  #21,23 #22,20 # 21,22   11,11
+  - 26,5 #108,20 #26,5 #53,11 #53, 11 #107,23 #107,20 #  106,22 53,10
+  - 5,26 #21,105 #5,26 #10,54 #10, 53 #20,108 #22,105 # 21,107 11,53
+  - 26,26 #107,106 #26,27 #53,54 #53, 54 #107,109 #107,106 # 106,107 54,53
   functions:
   - computeSignal
 
@@ -172,9 +174,10 @@ loop:
  numItersIM: 5
  affinity: 2
  method: push-pull
- IMFile: "res/IM_07nov2024.npy"
- IMCubeFile: "res/IM_cube_07nov2024.npy"
- weightFile : "res/frame_weights_07nov2024.npy"
+ pushPullFile: "res/push_pull_3mar2025_4bin.pickle"
+#  IMFile: "res/IM_10feb2025_FF.npy"
+#  IMCubeFile: "res/IM_cube_10feb2025_FF.npy"
+#  weightFile : "res/frame_weights_10feb2025_FF.npy"
  functions:
  - timeResolvedIntegratorWithTurbulence
 #- standardIntegratorWithTurbulence
