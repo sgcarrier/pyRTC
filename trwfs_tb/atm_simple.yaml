@@ -1,0 +1,28 @@
+
+
+wfc:
+  name: "OOPAOWFC"
+  numActuators: 356
+  numModes: 100
+  flatFile: ""
+  saveFile: "flat.npy"
+  m2cFile:  ""
+  affinity: 3
+  commandCap: 0.8
+  hardwareDelay: 0.001
+  frameDelay: 0
+  functions:
+  - sendToHardware
+
+loop:
+  gain: 0.5
+  numDroppedModes: 0
+  pokeAmp: 0.01 #
+  numItersIM: 5
+  affinity: 2
+  method: push-pull
+  functions:
+  - standardIntegrator
+
+
+
