@@ -28,8 +28,9 @@ wfs, dm, psf = sim.get_hardware()
 #wfc.start()
 #wfc.flatten()
 
+sim_atm=OOPAO_atm()
 
-
-
-
+dm_commands=sim_atm.getNextTurbAsModes() #here are actuators are the model basis. Should rename function in the future I think
+#can create a loop to get dm commands and save them to .npy file if things look correct
+plt.plot(dm_commands)
 # %%

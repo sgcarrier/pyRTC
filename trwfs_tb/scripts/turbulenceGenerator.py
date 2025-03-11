@@ -14,7 +14,7 @@ import numpy as np
 
 class OOPAO_atm():
 
-    def __init__(self, wfc) -> None:
+    def __init__(self) -> None:
 
         self.param = initializeParameterFile()
 
