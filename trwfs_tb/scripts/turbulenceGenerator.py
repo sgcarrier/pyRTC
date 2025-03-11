@@ -8,7 +8,7 @@ from OOPAO.Telescope import Telescope
 #from OOPAO.calibration.compute_KL_modal_basis import compute_M2C
 #from OOPAO.tools.displayTools import displayMap
 
-from res.parameterFile_TR_PWFS_closed_loop import initializeParameterFile
+from res.parameterFile_atm import initializeParameterFile
 from OOPAO.tools.displayTools           import displayMap
 import numpy as np
 
@@ -20,7 +20,7 @@ class OOPAO_atm():
 
 
         #Create our Telescope Simulatation
-        self.tel = Telescope(   resolution          =  22, #self.param['resolution'],
+        self.tel = Telescope(   resolution          =  23,
                                 diameter            =  self.param['diameter'],
                                 samplingTime        =  self.param['samplingTime'],
                                 centralObstruction  =  self.param['centralObstruction'])
@@ -31,9 +31,9 @@ class OOPAO_atm():
         self.ngs* self.tel
 
         self.atm = Atmosphere(  telescope     = self.tel,
-                                r0            =  self.param['r0'],
-                                L0            =  self.param['L0'],
-                                windSpeed     =  self.param['windSpeed'],
+                                r0            =  self.param['r0']*self.param['dmPupil']/self.param['diameter'],
+                                L0            =  self.param['L0']*self.param['dmPupil']/self.param['diameter'],
+                                windSpeed     =  self.param['windSpeed']*self.param['dmPupil']/self.param['diameter'],
                                 fractionalR0  =  self.param['fractionnalR0'],
                                 windDirection =  self.param['windDirection'],
                                 altitude      =  self.param['altitude'])
@@ -42,10 +42,10 @@ class OOPAO_atm():
         self.atm.initializeAtmosphere(telescope=self.tel)
 
         self.tel+self.atm
+        self.C2M=np.load(self.param['influence_fnt_filename'])
+        #self.setC2MFromM2C(wfc.M2C)
 
-        self.setC2MFromM2C(wfc.M2C)
-
-        self.mask = self.genMask(11)
+        self.mask = self.tel.pupil.copy()
 
 
     def getNextAtmOPD(self):

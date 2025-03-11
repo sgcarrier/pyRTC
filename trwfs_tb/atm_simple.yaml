@@ -2,8 +2,8 @@
 
 wfc:
   name: "OOPAOWFC"
-  numActuators: 356
-  numModes: 100
+  numActuators: 97
+  numModes: 97
   flatFile: ""
   saveFile: "flat.npy"
   m2cFile:  ""
