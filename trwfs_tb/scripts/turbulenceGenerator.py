@@ -42,7 +42,7 @@ class OOPAO_atm():
         self.atm.initializeAtmosphere(telescope=self.tel)
 
         self.tel+self.atm
-        self.C2M=np.load(self.param['influence_fnt_filename'])
+        self.C2M=np.load(self.param['influence_fnt_filename'])*1e-6 # go from um to m
         #self.setC2MFromM2C(wfc.M2C)
 
         self.mask = self.tel.pupil.copy()
@@ -53,7 +53,7 @@ class OOPAO_atm():
         return self.atm.OPD
     
     def getNextTurbAsModes(self):
-        atm_phase = self.rebin(self.getNextAtmOPD(), (11,11)) *10
+        atm_phase = self.getNextAtmOPD()
         modes_to_send = self.C2M @  atm_phase[self.mask]
         return modes_to_send
     
