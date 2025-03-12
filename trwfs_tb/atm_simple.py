@@ -9,7 +9,7 @@ from pyRTC.Loop import *
 from pyRTC.hardware.OOPAOInterface import OOPAOInterface
 
 from hardware.TimeResolvedLoop import *
-
+from scripts.turbulenceGenerator import OOPAO_atm
 
 from pyRTC.utils import *
 
