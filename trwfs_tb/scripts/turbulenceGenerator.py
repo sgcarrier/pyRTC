@@ -20,7 +20,7 @@ class OOPAO_atm():
 
 
         #Create our Telescope Simulatation
-        self.tel = Telescope(   resolution          =  23,
+        self.tel = Telescope(   resolution          =  22,
                                 diameter            =  self.param['diameter'],
                                 samplingTime        =  self.param['samplingTime'],
                                 centralObstruction  =  self.param['centralObstruction'])
@@ -33,7 +33,7 @@ class OOPAO_atm():
         self.atm = Atmosphere(  telescope     = self.tel,
                                 r0            =  self.param['r0']*self.param['dmPupil']/self.param['diameter'],
                                 L0            =  self.param['L0']*self.param['dmPupil']/self.param['diameter'],
-                                windSpeed     =  self.param['windSpeed']*self.param['dmPupil']/self.param['diameter'],
+                                windSpeed     =  [self.param['dmPupil']/self.param['diameter'] * x for x in self.param['windSpeed']],
                                 fractionalR0  =  self.param['fractionnalR0'],
                                 windDirection =  self.param['windDirection'],
                                 altitude      =  self.param['altitude'])

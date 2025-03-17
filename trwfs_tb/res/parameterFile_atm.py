@@ -19,7 +19,7 @@ def initializeParameterFile():
     param['r0'                   ] = 0.045                                           # value of r0 in the visibile in [m]
     param['L0'                   ] = 30                                             # value of L0 in the visibile in [m]
     param['fractionnalR0'        ] = [1.0]                                            # Cn2 profile
-    param['windSpeed'            ] = 7                                          # wind speed of the different layers in [m.s-1]
+    param['windSpeed'            ] = [7]                                          # wind speed of the different layers in [m.s-1]
     param['windDirection'        ] = [90]                                            # wind direction of the different layers in [degrees]
     param['altitude'             ] = [0]                                          # altitude of the different layers in [m]
                               
@@ -46,7 +46,7 @@ def initializeParameterFile():
     param['mechanicalCoupling'   ] = 0.3
     param['isM4'                 ] = False                                           # tag for the deformable mirror class
     param['dm_coordinates'       ] = None                                           # tag for the eformable mirror class
-    param['influence_fnt_filename']= 'trwfs_tb/res/poke_influence_97_19juin_flattened_maskedout.npy'
+    param['influence_fnt_filename']= '/Users/wasi/Desktop/ML_PyRTC/pyRTC/trwfs_tb/res/poke_influence_97_19juin_flattened_maskedout.npy'
     # mis-registrations                                                             
     param['shiftX'               ] = 0                                              # shift X of the DM in pixel size units ( tel.D/tel.resolution ) 
     param['shiftY'               ] = 0                                              # shift Y of the DM in pixel size units ( tel.D/tel.resolution )
