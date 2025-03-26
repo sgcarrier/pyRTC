@@ -20,7 +20,7 @@ class OOPAO_atm():
 
 
         #Create our Telescope Simulatation
-        self.tel = Telescope(   resolution          =  22,
+        self.tel = Telescope(   resolution          =  352,
                                 diameter            =  self.param['diameter'],
                                 samplingTime        =  self.param['samplingTime'],
                                 centralObstruction  =  self.param['centralObstruction'])
@@ -38,15 +38,16 @@ class OOPAO_atm():
                                 windDirection =  self.param['windDirection'],
                                 altitude      =  self.param['altitude'])
 
-
+        
         self.atm.initializeAtmosphere(telescope=self.tel)
 
         self.tel+self.atm
-        self.C2M=np.load(self.param['influence_fnt_filename'])*1e-6 # go from um to m
-        #self.setC2MFromM2C(wfc.M2C)
+        self.M2C=np.load("/Users/wasi/Desktop/ML_PyRTC/pyRTC/trwfs_tb/res/M2C_synthetic.npy")# go from um to m
+ 
+        self.setC2MFromM2C(self.M2C)
+ 
 
-        self.mask = self.tel.pupil.copy()
-
+        self.mask = self.tel.pupil.copy().astype('int')
 
     def getNextAtmOPD(self):
         self.atm.update()
@@ -54,7 +55,7 @@ class OOPAO_atm():
     
     def getNextTurbAsModes(self):
         atm_phase = self.getNextAtmOPD()
-        modes_to_send = self.C2M @  atm_phase[self.mask]
+        modes_to_send = self.C2M @  atm_phase[self.mask==1]
         return modes_to_send
     
 
@@ -73,4 +74,13 @@ class OOPAO_atm():
         return actMap
     
     def setC2MFromM2C(self, M2C):
-        self.C2M = np.linalg.pinv(M2C)
+        self.C2M =np.load('/Users/wasi/Desktop/ML_PyRTC/pyRTC/trwfs_tb/res/C2M_synthetic.npy')
+    
+    def getdmplot(self):   
+        import matplotlib.pyplot as plt     
+        atm_phase = self.getNextAtmOPD()
+        v=self.C2M @ atm_phase[self.mask==1]
+        dmMap=self.genMask(11)
+        temp=np.zeros((11,11))
+        temp[dmMap==1]=v
+        return temp
