@@ -6,7 +6,8 @@
 __pycache__/
 *.py[cod]
 *$py.class
-
+*.mp4
+*.git
 # C extensions
 *.so
 
