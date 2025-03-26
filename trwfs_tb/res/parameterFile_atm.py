@@ -16,7 +16,7 @@ def initializeParameterFile():
     
     ###%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% ATMOSPHERE PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     #everything needs to be in units of D/x
-    param['r0'                   ] = 0.045                                           # value of r0 in the visibile in [m]
+    param['r0'                   ] = 0.045                                       # value of r0 in the visibile in [m]
     param['L0'                   ] = 30                                             # value of L0 in the visibile in [m]
     param['fractionnalR0'        ] = [1.0]                                            # Cn2 profile
     param['windSpeed'            ] = [7]                                          # wind speed of the different layers in [m.s-1]
@@ -30,15 +30,15 @@ def initializeParameterFile():
     param['nPixelPerSubap'       ] = 2                                          # sampling of the PWFS subapertures
     param['resolution'           ] = param['nSubaperture']*param['nPixelPerSubap']  # resolution of the telescope driven by the PWFS
     param['sizeSubaperture'      ] = param['diameter']/param['nSubaperture']        # size of a sub-aperture projected in the M1 space
-    param['samplingTime'         ] = 1/1000                                         # loop sampling time in [s]
-    param['centralObstruction'   ] = 0.1                                             # central obstruction in percentage of the diameter
+    param['samplingTime'         ] = 1/500                                         # loop sampling time in [s]
+    param['centralObstruction'   ] = 0                                             # central obstruction in percentage of the diameter
     param['nMissingSegments'     ] = 0                                             # number of missing segments on the M1 pupil
     param['m1_reflectivity'      ] = 1                                   # reflectivity of the 798 segments
           
     ###%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% NGS PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     
     param['magnitude'            ] = 4.0                                             # magnitude of the guide star
-    param['opticalBand'          ] = 'I'                                            # optical band of the guide star
+    param['opticalBand'          ] = 'R'                                            # optical band of the guide star
     
     
     ###%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% DM PROPERTIES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -46,7 +46,7 @@ def initializeParameterFile():
     param['mechanicalCoupling'   ] = 0.3
     param['isM4'                 ] = False                                           # tag for the deformable mirror class
     param['dm_coordinates'       ] = None                                           # tag for the eformable mirror class
-    param['influence_fnt_filename']= '/Users/wasi/Desktop/ML_PyRTC/pyRTC/trwfs_tb/res/poke_influence_97_19juin_flattened_maskedout.npy'
+    param['influence_fnt_filename']= '/Users/wasi/Desktop/ML_PyRTC/pyRTC/trwfs_tb/res/influence_fnts_mask_june19_2024.npy'
     # mis-registrations                                                             
     param['shiftX'               ] = 0                                              # shift X of the DM in pixel size units ( tel.D/tel.resolution ) 
     param['shiftY'               ] = 0                                              # shift Y of the DM in pixel size units ( tel.D/tel.resolution )
@@ -54,7 +54,7 @@ def initializeParameterFile():
     param['anamorphosisAngle'    ] = 0                                              # anamorphosis angle of the DM in [degrees]
     param['radialScaling'        ] = 0                                              # radial scaling in percentage of diameter
     param['tangentialScaling'    ] = 0                                              # tangential scaling in percentage of diameter
-    param['dmPupil'            ] = 0.0135                                           # physical size of DM pupil in units of m. So ALPAO dm97 should be 13.5mm
+    param['dmPupil'            ] = 1                                    # physical size of DM pupil in units of m. So ALPAO dm97 should be 13.5mm
 
 
     
