@@ -42,7 +42,7 @@ class OOPAO_atm():
         self.atm.initializeAtmosphere(telescope=self.tel)
 
         self.tel+self.atm
-        self.M2C=np.load("/Users/wasi/Desktop/ML_PyRTC/pyRTC/trwfs_tb/res/M2C_synthetic.npy")# go from um to m
+        self.M2C=np.load("C:\Users\mcaousr\Desktop\pyRTC\trwfs_tb\res\M2C_synthetic.npy")# go from um to m
  
         self.setC2MFromM2C(self.M2C)
  
@@ -74,7 +74,7 @@ class OOPAO_atm():
         return actMap
     
     def setC2MFromM2C(self, M2C):
-        self.C2M =np.load('/Users/wasi/Desktop/ML_PyRTC/pyRTC/trwfs_tb/res/C2M_synthetic.npy')
+        self.C2M =np.load('C:\Users\mcaousr\Desktop\pyRTC\trwfs_tb\res\C2M_synthetic.npy')
     
     def getdmplot(self):   
         import matplotlib.pyplot as plt     
