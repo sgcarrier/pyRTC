@@ -77,20 +77,19 @@ fsm:
   autoZero: False
 
 
-
 wfs:
   name: ANDOR_IXON
   idx: 0
-  binning: 4 #1
-  exposure: 0.01
+  #binning: 1 #2
+  exposure: 0.0625
   #gain: 0
   #bitDepth: 10
   #left: 416 #208
   #top: 280 #140
-  width: 32 # 128 #128
-  height: 32 #128 #128
+  width: 128
+  height: 128 
   darkCount: 1000
-  darkFile: "res/andor_dark_4bin.npy"
+  darkFile: "res/andor_dark.npy"
   affinity: 3
   functions:
   - expose

@@ -14,7 +14,7 @@ from pyRTC.utils import *
 from scripts.turbulenceGenerator import OOPAO_atm
 # %% 
 ################### Load configs ###################
-conf = read_yaml_file("conf_simple.yaml")
+conf = read_yaml_file("conf.yaml")
 
 confDM     = conf[    "wfc"]
 confMOD    = conf[    "fsm"]
@@ -50,63 +50,24 @@ wfs = AndorIXon(conf=confWFS)
 wfs.open_shutter()
 
 wfs.start()
-wfs.setExposure(0.0325)
 
 ### do plt.imshow(wfs.read())
 #%%
 # pos = {"A": 3.0, "B": 3.0}
 # fsm.goTo(pos)
 time.sleep(1)
-# wfc.flatten()
+wfc.flatten()
 img_flat = wfs.read().astype(np.float64)
-
-
-#%% 
-############## Put Turbulence on the DM ##############
-from scripts.turbulencePreGen import *
-turb = np.load("res/turb_coeff_Jun21_with_floating.npy")
-
-
-turb *= 1
-turb_no_piston = turb[:,1:]
-turb_no_piston_first_5_modes = turb_no_piston
-
-# Remove some modes if needed
-MODES_TO_USE = 5
-turb_no_piston_first_5_modes[:, MODES_TO_USE:] = 0
-
-atm = DummyAtm(turb_no_piston_first_5_modes)
-
-t = atm.getNextTurbAsModes()
-t_cmd =ModaltoZonalWithFlat(t, 
-                     wfc.f_M2C,
-                     wfc.flat)
-
-
-print(np.max(np.abs(t_cmd)))
-#%%
-atm.currentPos = 0
-t = atm.getNextTurbAsModes()
-
-t_cmd = wfc.f_M2C@t
-phase_screen = np.zeros((11,11))
-phase_screen[atm.mask] =t_cmd 
-plt.imshow(phase_screen)
-plt.colorbar()
-row=15
-wfc.write(turb[0,row:])
-
-img_trub = wfs.read().astype(np.float64)
-
-plt.imshow(img_trub-img_flat)
-
-
 
 #%% ########### Run our own turbulence on the DM.
 
 sim_atm=OOPAO_atm()
 
-dm_commands=sim_atm.getNextTurbAsModes
+dm_commands=sim_atm.getNextTurbAsModes()
+wfc.write(dm_commands)
+img_turb= wfs.read().astype(np.float64)
+
+plt.imshow(img_turb-img_flat)
 
 
 # %%
@@ -142,21 +103,15 @@ def getcube(numFrames,filename,overwrite=True):
     return cube,master
 
 # %%
-from scripts.turbulencePreGen import *
-turb = np.load("res/turb_coeff_Jun21_with_floating.npy")
-
-
-turb *= 1
-turb_no_piston = turb[:,1:]
-turb_no_piston_first_5_modes = turb_no_piston
 
 
 
-def get_turb_data(numFrames,fitsfile,filename=turb_no_piston):
+def get_turb_data(numFrames,fitsfile):
     frames=[]
-    filename[:,0:2]=0
+    sim_atm=OOPAO_atm()
     for i in range(numFrames):
-        wfc.write(filename[i,:])
+        dm_commands=sim_atm.getNextTurbAsModes()
+        wfc.write(dm_commands+wfc.flat)
         plt.pause(0.1)
         frames.append(wfs.read().astype(np.float64))
 
@@ -173,7 +128,7 @@ def get_turb_data(numFrames,fitsfile,filename=turb_no_piston):
 
 import matplotlib.animation as animation
  
-def create_difference_movie(datacube1, darkframe, output_filename='flat_diff_movie_19-03-25.gif', fps=20):
+def create_difference_movie(datacube1, darkframe, output_filename='flat_diff_movie_19-03-25.mp4', fps=20):
 
     """
 
@@ -220,3 +175,7 @@ def create_difference_movie(datacube1, darkframe, output_filename='flat_diff_mov
  
         
 # %%
+
+######### get Flat ########
+
+get
