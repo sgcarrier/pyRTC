@@ -4,12 +4,12 @@ wfc:
   name: "ALPAO"
   serial: "BOL106"
   numActuators: 97
-  numModes: 68
+  numModes: 97
   flatFile: "res/flat_10feb2025.npy" 
   saveFile: "res/save.npy" 
-  m2cFile: "res/new_M2C_68_JP_1um_21june.npy" 
+  m2cFile: "" 
   #m2cFile: "res/M2C_POKE_69.npy" #For poking
-  floatingActuatorsFile: "res/floating_actuators.npy"
+  floatingActuatorsFile: ""
   floatingInfluenceRadius: 1
   affinity: 5
   commandCap: 0.4

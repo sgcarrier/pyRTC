@@ -128,7 +128,7 @@ def get_turb_data(numFrames,fitsfile):
 
 import matplotlib.animation as animation
  
-def create_difference_movie(datacube1, darkframe, output_filename='flat_diff_movie_19-03-25.mp4', fps=20):
+def create_difference_movie(datacube1, darkframe, output_filename='difference_withmod_movie_28-03-25.gif', fps=20):
 
     """
 
@@ -152,7 +152,7 @@ def create_difference_movie(datacube1, darkframe, output_filename='flat_diff_mov
     im = ax.imshow(diff_cube[0], cmap='viridis', animated=True)
 
     ax.set_title("Frame 0")
-
+    cbar = fig.colorbar(im, ax=ax)
     # Update function for animation.
 
     def update(frame):
@@ -160,6 +160,8 @@ def create_difference_movie(datacube1, darkframe, output_filename='flat_diff_mov
         im.set_array(diff_cube[frame])
 
         ax.set_title(f"Frame {frame}")
+        im.set_clim(diff_cube.min(), diff_cube.max())
+        cbar.update_normal(im)
 
         return im,
 
@@ -177,5 +179,3 @@ def create_difference_movie(datacube1, darkframe, output_filename='flat_diff_mov
 # %%
 
 ######### get Flat ########
-
-get
