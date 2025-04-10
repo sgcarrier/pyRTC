@@ -31,9 +31,9 @@ class OOPAO_atm():
         self.ngs* self.tel
 
         self.atm = Atmosphere(  telescope     = self.tel,
-                                r0            =  self.param['r0']*self.param['dmPupil']/self.param['diameter'],
-                                L0            =  self.param['L0']*self.param['dmPupil']/self.param['diameter'],
-                                windSpeed     =  [self.param['dmPupil']/self.param['diameter'] * x for x in self.param['windSpeed']],
+                                r0            =  self.param['r0'],
+                                L0            =  self.param['L0'],
+                                windSpeed     =  self.param['windSpeed'],
                                 fractionalR0  =  self.param['fractionnalR0'],
                                 windDirection =  self.param['windDirection'],
                                 altitude      =  self.param['altitude'])
