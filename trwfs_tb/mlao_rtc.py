@@ -94,7 +94,7 @@ def getcube(numFrames,filename,overwrite=True):
     frames=[]
     for i in range(numFrames):
         wfc.flatten()
-        frames.append(wfs.read().astype(np.float64))
+        frames.append(wfs.read().astype(np.float32))
     cube=np.stack(frames, axis=0)
     master=np.mean(cube, axis=0)
     hdu=fits.PrimaryHDU(data=cube)
@@ -111,9 +111,9 @@ def get_turb_data(numFrames,fitsfile):
     sim_atm=OOPAO_atm()
     for i in range(numFrames):
         dm_commands=sim_atm.getNextTurbAsModes()
-        wfc.write(dm_commands+wfc.flat)
+        wfc.write(dm_commands.astype(np.float32))
         plt.pause(0.1)
-        frames.append(wfs.read().astype(np.float64))
+        frames.append(wfs.read().astype(np.float32))
 
     cube=np.stack(frames,axis=0)
     master=np.mean(cube, axis=0)
