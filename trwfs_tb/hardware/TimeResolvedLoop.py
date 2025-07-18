@@ -214,6 +214,7 @@ class TimeResolvedLoop(Loop):
 
         #For each mode
         for i in range(maxNumModes):
+            print(f"pushPullRef_cube - Mode {i}/{maxNumModes}")
             #Reset the correction
             correction = self.flat.copy()
             #Plus amplitude

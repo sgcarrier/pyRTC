@@ -34,7 +34,17 @@ class PIE517Modulator(Modulator):
         #os.chdir(conf['libFolder'])
         self.mod = GCSDevice()
         devices = self.mod.EnumerateUSB()
-        self.mod.ConnectUSB(devices[0])
+
+        deviceName = None
+        for device in devices:
+            if device.startswith("PI E-517 Display"):
+                deviceName = device
+                continue
+
+        if deviceName is not None:
+            self.mod.ConnectUSB(deviceName)
+        else:
+            raise Exception("PI device not found!")
         #os.chdir(originalDirectory)
 
         #self.servosOn = conf["servosOn"]

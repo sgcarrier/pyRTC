@@ -5,7 +5,7 @@ wfc:
   serial: "BOL106"
   numActuators: 97
   numModes: 68
-  flatFile: "res/flat_10feb2025.npy" 
+  flatFile: "res/flat_15july2025.npy" 
   saveFile: "res/save.npy" 
   m2cFile: "res/new_M2C_68_JP_1um_21june.npy" 
   #m2cFile: "res/M2C_POKE_69.npy" #For poking
@@ -174,7 +174,7 @@ loop:
  numItersIM: 5
  affinity: 2
  method: push-pull
- pushPullFile: "res/push_pull_3mar2025_4bin.pickle"
+ pushPullFile: "res/push_pull_18july2025_4bin.pickle"
 #  IMFile: "res/IM_10feb2025_FF.npy"
 #  IMCubeFile: "res/IM_cube_10feb2025_FF.npy"
 #  weightFile : "res/frame_weights_10feb2025_FF.npy"

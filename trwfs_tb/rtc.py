@@ -30,12 +30,12 @@ confLOOP   = conf[   "loop"]
 # %% 
 ################### Start PSF Cam ###################
 # Start PSF Cam
-dmpsf = PGScienceCam(conf=confDMPSF)
-dmpsf.start()
+#dmpsf = PGScienceCam(conf=confDMPSF)
+#dmpsf.start()
 
 #time.sleep(1)
-#modpsf = PGScienceCam(conf=confMODPSF)
-#modpsf.start()
+modpsf = PGScienceCam(conf=confMODPSF)
+modpsf.start()
 
 #%% 
 ################### Load ALPAO DM and flatten ###################
@@ -340,8 +340,8 @@ loop = TimeResolvedLoop(conf=conf, fsm=fsm)
 
 #loop.grabRefTRSlopes()
 #%%
-#loop.computeIM()
-loop.calcFrameWeights()
+loop.computeIM()
+#loop.calcFrameWeights()
 
 #%%
 plt.figure()
@@ -613,14 +613,14 @@ wfc.flatten()
 loop.resetCurrentCorrection()
 anim.save("atmo.gif", fps=10)
 #%%
-atm.setSpeed(3)
+atm.setSpeed(1)
 loop.setTurbulenceGenerator(atm)
 
 
 #%%
 wfs.activateNoise = True
 wfs.activateRONoise = False
-wfs.total_photon_flux = 20
+wfs.total_photon_flux = 200
 #%%
 fsm.stop()
 fsm.currentPos = None
@@ -639,7 +639,7 @@ for i in range(iterations):
     #loop.turbulenceGenerator.currentPos +=10
     loop.timeResolvedIntegratorWithTurbulence()
     #loop.standardIntegratorWithTurbulence()
-    time.sleep(0.1)
+    time.sleep(0.01)
     #strehls[i] = dmpsf.strehl_ratio
     read_WF = ((REF_WF - grabHASOImage(camera, confSHWFS)))
     read_WF_valid = read_WF[~np.isnan(read_WF)] 
