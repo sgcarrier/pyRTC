@@ -30,12 +30,12 @@ confLOOP   = conf[   "loop"]
 # %% 
 ################### Start PSF Cam ###################
 # Start PSF Cam
-#dmpsf = PGScienceCam(conf=confDMPSF)
-#dmpsf.start()
+dmpsf = PGScienceCam(conf=confDMPSF)
+dmpsf.start()
 
 #time.sleep(1)
-modpsf = PGScienceCam(conf=confMODPSF)
-modpsf.start()
+# modpsf = PGScienceCam(conf=confMODPSF)
+# modpsf.start()
 
 #%% 
 ################### Load ALPAO DM and flatten ###################
@@ -454,6 +454,7 @@ wfs.activateRONoise = False
 loop.turbulenceGenerator = None
 time.sleep(1)
 for i in range(5):
+    #loop.standardIntegratorWithTurbulence()
     loop.timeResolvedIntegratorWithTurbulence()
     time.sleep(0.1)
 
@@ -598,6 +599,7 @@ fig = plt.figure()
 img = plt.imshow(REF_WF)
 ann = plt.annotate(str(0), (0,0))
 plt.colorbar(img)
+turb_rms = np.zeros(100)
 def animate(i):
     t = atm.atm[i,:]
     loop.wfcShm.write(t)
@@ -607,6 +609,7 @@ def animate(i):
     img.set_data(read_WF)
     img.set_clim(np.min(read_WF_valid), np.max(read_WF_valid))
     ann.set_text(f"f={i},rms={int(rms_val*1000)}nm")
+    turb_rms[i]= rms_val
 
 anim = animation.FuncAnimation(fig, animate, frames= 10*10, interval=1000/10)
 wfc.flatten()
@@ -620,12 +623,12 @@ loop.setTurbulenceGenerator(atm)
 #%%
 wfs.activateNoise = True
 wfs.activateRONoise = False
-wfs.total_photon_flux = 200
+wfs.total_photon_flux = 100
 #%%
 fsm.stop()
 fsm.currentPos = None
-iterations = 200
-loop.setGain(0.3)
+iterations = 70
+loop.setGain(0.5)
 strehls = np.zeros(iterations)
 rms_plot = np.zeros(iterations)
 REF_coeff = grabHASOCoeffs(camera, confSHWFS, NUM_MODES)
@@ -636,28 +639,96 @@ current_wfc_shape = np.zeros((iterations, wfc.layout.shape[0], wfc.layout.shape[
 turb_modes  = np.zeros((iterations, NUM_MODES))
 corr_modes  = np.zeros((iterations, NUM_MODES))
 for i in range(iterations):
-    #loop.turbulenceGenerator.currentPos +=10
-    loop.timeResolvedIntegratorWithTurbulence()
-    #loop.standardIntegratorWithTurbulence()
-    time.sleep(0.01)
-    #strehls[i] = dmpsf.strehl_ratio
-    read_WF = ((REF_WF - grabHASOImage(camera, confSHWFS)))
-    read_WF_valid = read_WF[~np.isnan(read_WF)] 
-    saved_WFs[i,:,:] = read_WF
-    rms_plot[i] = np.sqrt(np.mean(np.square(read_WF_valid - np.mean(read_WF_valid))))
-    CUR_coeff = (REF_coeff - grabHASOCoeffs(camera, confSHWFS, NUM_MODES))
-    saved_coeffs[i,:] = CUR_coeff
-    current_wfc_shape[i,wfc.layout] = wfc.currentShape
-    print(np.max(np.abs(wfc.currentShape)))
-    print(f"it = {i}, RMS={rms_plot[i]}")
-    img_slopes.append(loop.latest_slopes)
-    turb_modes[i,:] = loop.turbModes
-    corr_modes[i,:] = loop.latest_correction
+    try:
+        #loop.turbulenceGenerator.currentPos +=10
+        loop.timeResolvedIntegratorWithTurbulence()
+        #loop.standardIntegratorWithTurbulence()
+        time.sleep(0.1)
+        strehls[i] = dmpsf.strehl_ratio
+        read_WF = ((REF_WF - grabHASOImage(camera, confSHWFS)))
+        read_WF_valid = read_WF[~np.isnan(read_WF)] 
+        saved_WFs[i,:,:] = read_WF
+        rms_plot[i] = np.sqrt(np.mean(np.square(read_WF_valid - np.mean(read_WF_valid))))
+        CUR_coeff = (REF_coeff - grabHASOCoeffs(camera, confSHWFS, NUM_MODES))
+        saved_coeffs[i,:] = CUR_coeff
+        current_wfc_shape[i,wfc.layout] = wfc.currentShape
+        print(np.max(np.abs(wfc.currentShape)))
+        print(f"it = {i}, RMS={rms_plot[i]:.4f}, SR={strehls[i]:.4f}")
+        #img_slopes.append(loop.latest_slopes)
+        turb_modes[i,:] = loop.turbModes
+        corr_modes[i,:] = loop.latest_correction
+    except KeyboardInterrupt:
+        fsm.stop()
+        print("Stopped loop")
+        break
 
 
 #%%
 wfc.flatten()
 loop.resetCurrentCorrection()
+
+#%%
+mode_chosen = 0
+
+fig,ax=plt.subplots()
+plt.plot(turb_modes[:,mode_chosen], "r-", label=f"turb")
+plt.plot(-corr_modes[:,mode_chosen], "k-", label=f"corr")
+
+# And a corresponding grid
+ax.grid(which='both')
+
+plt.legend()
+
+
+#%%
+
+
+fig,ax=plt.subplots()
+for mode_chosen in range(30):
+    diff = turb_modes[:,mode_chosen] +  corr_modes[:,mode_chosen]
+    plt.plot(diff, label=f"{mode_chosen}")
+
+# And a corresponding grid
+ax.grid(which='both')
+fig.suptitle(f'Residual coeffs for each mode per iteration', fontsize=16)
+fig.legend()
+
+#%%
+
+fig, (ax1,ax2) = plt.subplots(2,1)
+
+ax1.plot(rms_plot*1000)
+ax1.set_title("WFE RMS (nm)")
+
+ax2.plot(strehls)
+ax2.set_title("Strehl")
+
+fig.suptitle(f'Closed-loop performance', fontsize=16)
+
+#%%
+
+fig, (ax1,ax2) = plt.subplots(2,1)
+
+#ax1.plot(rms_plot_norm_10*1000, label="Modulated - 0.5g")
+#ax1.plot(rms_plot_norm_500_03g*1000, label="Modulated - 0.3g")
+ax1.plot(rms_plot_tr_100_05g*1000, label="TR - 0.5g")
+#ax1.plot(rms_plot_FF_10*1000, label="TR-Cube - 0.5g")
+ax1.plot(rms_plot_ff_100_05g*1000, label="TR-Cube - 0.5g")
+ax1.set_title("WFE RMS (nm)")
+
+#ax2.plot(strehl_norm_10, label="Modulated - 0.5g")
+#ax2.plot(strehl_norm_500_03g, label="Modulated - 0.3g")
+ax2.plot(strehl_tr_100_05g, label="TR - 0.5g")
+#ax2.plot(strehl_FF_10, label="TR-Cube - 0.5g")
+ax2.plot(strehl_ff_100_05g, label="TR-Cube - 0.5g")
+ax2.set_title("Strehl")
+
+ax1.legend()
+
+ax1.axvline(x=30, color='red', linestyle='--')
+ax2.axvline(x=30, color='red', linestyle='--')
+
+fig.suptitle(f'Closed-loop performance: {wfs.total_photon_flux*48} photons, gain={loop.gain}', fontsize=16)
 
 #%%
 import pickle
@@ -907,7 +978,12 @@ loop.resetCurrentCorrection()
 
 #%%
 loop.frame_weights = np.ones(loop.frame_weights.shape)
-loop.IM = np.sum(loop.IM_cube * loop.frame_weights[np.newaxis, :, :], axis=1)
+loop.makeIM(loop.push_cube,
+                    loop.pull_cube,  
+                    loop.ref_slopes,
+                    loop.pokeAmp,
+                    loop.frame_weights)
+
 loop.computeCM()
 #%%
 slopes = loop.wfsShm.read()
@@ -950,6 +1026,8 @@ from scripts.turbulenceGenerator import OOPAO_atm
 import matplotlib.pyplot as plt
 atm = OOPAO_atm(wfc)
 
+atm.numActiveModes = 30
+
 mask = atm.genMask(11)
 atm_phase = atm.rebin(atm.getNextAtmOPD(), (11,11))
 atm_phase[~mask] = 0
@@ -957,6 +1035,7 @@ atm_phase[~mask] = 0
 plt.figure()
 plt.imshow(atm_phase)
 plt.colorbar()
+
 
 
 #%%
@@ -1020,12 +1099,15 @@ for i in range(5):
 
 
 #%%
-for i in range(5):
-    modes_to_send = atm.getNextTurbAsModes()
+for i in range(1):
+    modes_to_send = atm.getNextTurbAsModes() 
     print(np.max(np.abs(modes_to_send)))
     wfc.write(modes_to_send)
     
     time.sleep(1)
+
+#%%
+wfc.flatten()
 
 #%% 
 ################### Save WFS fits ###################

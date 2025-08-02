@@ -23,7 +23,7 @@ def initializeParameterFile():
     # param['windDirection'        ] = [0,72,144,216,288]                                            # wind direction of the different layers in [degrees]
     # param['altitude'             ] = [0, 1000,5000,10000,12000 ]                                          # altitude of the different layers in [m]
     param['fractionnalR0'        ] = [1.0]                                            # Cn2 profile
-    param['windSpeed'            ] = [20]                                          # wind speed of the different layers in [m.s-1]
+    param['windSpeed'            ] = [10]                                          # wind speed of the different layers in [m.s-1]
     param['windDirection'        ] = [90]                                            # wind direction of the different layers in [degrees]
     param['altitude'             ] = [0]                                          # altitude of the different layers in [m]
                               

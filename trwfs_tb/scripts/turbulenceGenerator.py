@@ -46,15 +46,19 @@ class OOPAO_atm():
         self.setC2MFromM2C(wfc.M2C)
 
         self.mask = self.genMask(11)
+        self.mult_factor = 10000
 
+        self.numActiveModes = 68
 
     def getNextAtmOPD(self):
         self.atm.update()
         return self.atm.OPD
     
     def getNextTurbAsModes(self):
-        atm_phase = self.rebin(self.getNextAtmOPD(), (11,11)) *10
+        atm_phase = self.rebin(self.getNextAtmOPD(), (11,11)) * self.mult_factor
         modes_to_send = self.C2M @  atm_phase[self.mask]
+        active_modes_to_send = np.zeros(modes_to_send.shape)
+        active_modes_to_send[:self.numActiveModes] = modes_to_send[:self.numActiveModes]
         return modes_to_send
     
 

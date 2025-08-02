@@ -14,6 +14,17 @@ def updateCorrectionTR(correction=np.array([], dtype=np.float64),
     new_corr = np.diag(gCM.astype(np.float64) @ (signal_per_mode_normed - ref_signal_per_mode_normed))
     return correction - new_corr
 
+
+@jit(nopython=True)
+def updateCorrectionTRFF(correction=np.array([], dtype=np.float64), 
+                       gCM=np.array([[]], dtype=np.float64),  
+                       slopes_TR=np.array([[]], dtype=np.float64),
+                       ref_signal_normed=np.array([[]], dtype=np.float64),):
+    signal_normed = slopes_TR / np.sum(slopes_TR)
+    #TODO Might be able to optimize this with einsum
+    new_corr = gCM.astype(np.float64) @ (signal_normed - ref_signal_normed)
+    return correction - new_corr
+
 class TimeResolvedLoop(Loop):
 
 
@@ -42,7 +53,10 @@ class TimeResolvedLoop(Loop):
         self.first_loop = True
 
         self.ref_signal_per_mode_normed = None
+        self.ref_signal_normed = None
         self.frame_weights = np.ones((self.numFrames,self.numModes))
+
+        self.FF_active= False
 
         self.loadPushPullCube()
 
@@ -310,15 +324,26 @@ class TimeResolvedLoop(Loop):
 
         # Remove this next line because it would grab the current correction AND turbulence applied to the DM 
         #currentCorrection = self.wfcShm.read()
-        if self.ref_signal_per_mode_normed is not None:
-            newCorrection = updateCorrectionTR(correction=self.currentCorrection, 
-                                            gCM=self.gCM, 
-                                            slopes_TR=self.latest_slopes,
-                                            weights=self.frame_weights,
-                                            ref_signal_per_mode_normed = self.ref_signal_per_mode_normed)
+
+        if self.FF_active:
+            if self.ref_signal_normed is not None:
+                newCorrection = updateCorrectionTRFF(correction=self.currentCorrection, 
+                                                gCM=self.gCM, 
+                                                slopes_TR=self.latest_slopes.flatten(),
+                                                ref_signal_normed = self.ref_signal_normed)
+            else:
+                print("Error: ref signal never defined, skipping loop")
+                return
         else:
-            print("Error: weighted ref signal never defined, skipping loop")
-            return
+            if self.ref_signal_per_mode_normed is not None:
+                newCorrection = updateCorrectionTR(correction=self.currentCorrection, 
+                                                gCM=self.gCM, 
+                                                slopes_TR=self.latest_slopes,
+                                                weights=self.frame_weights,
+                                                ref_signal_per_mode_normed = self.ref_signal_per_mode_normed)
+            else:
+                print("Error: weighted ref signal never defined, skipping loop")
+                return
         newCorrection[self.numActiveModes:] = 0
         self.latest_correction = newCorrection
         #print(f"Current correction = {newCorrection}")
@@ -377,6 +402,7 @@ class TimeResolvedLoop(Loop):
 
         self.computeCM()
         return
+    
 
     def changeWeightsAndUpdate(self, newWeights):
         self.frame_weights[:,:self.numModes] = newWeights
@@ -388,6 +414,26 @@ class TimeResolvedLoop(Loop):
                     self.frame_weights)
 
         self.computeCM()
+
+    def switchToFF(self):
+        self.FF_active= True
+
+        self.CM = np.zeros((self.numModes, self.signalSize*self.numFrames),dtype=self.signalDType)
+
+        self.IM       = np.zeros((self.signalSize*self.numFrames, self.numModes),dtype=self.signalDType)
+        push_flat = self.push_cube.reshape(-1, self.push_cube.shape[-1])
+        pull_flat = self.pull_cube.reshape(-1, self.pull_cube.shape[-1])
+        ref_flat  = self.ref_slopes.flatten()
+        for mode in range(self.numModes):
+            push_signal      = ((push_flat[:,mode]/np.sum(push_flat[:,mode])) - (ref_flat/np.sum(ref_flat)))
+            pull_signal      = ((pull_flat[:,mode]/np.sum(pull_flat[:,mode])) - (ref_flat/np.sum(ref_flat)))
+            self.IM[:,mode]  = (push_signal - pull_signal) / (2*self.pokeAmp)
+
+        self.ref_signal_normed = (ref_flat/np.sum(ref_flat))
+
+        self.computeCM()
+
+
 
     def plotWeights(self):
         plt.figure()
