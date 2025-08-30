@@ -34,8 +34,8 @@ dmpsf = PGScienceCam(conf=confDMPSF)
 dmpsf.start()
 
 #time.sleep(1)
-# modpsf = PGScienceCam(conf=confMODPSF)
-# modpsf.start()
+modpsf = PGScienceCam(conf=confMODPSF)
+modpsf.start()
 
 #%% 
 ################### Load ALPAO DM and flatten ###################
@@ -63,23 +63,6 @@ time.sleep(1)
 
 print(fsm.getCurrentPos())
 
-#%%
-################### Plot FSM path ###################
-from pipython import GCSDevice, pitools
-max_pos_x = []
-max_pos_y = []
-for i in range(len(fsm.points)):
-    fsm.step()
-    time.sleep(0.01)
-    im = modpsf.read()
-    max_pos_x.append(np.unravel_index(im.argmax(), im.shape)[0])
-    max_pos_y.append(np.unravel_index(im.argmax(), im.shape)[1])
-    pitools.waitonready(fsm.mod)
-
-plt.figure()
-plt.scatter(max_pos_x, max_pos_y)
-plt.show()    
-print(f"x_range={np.max(max_pos_x) - np.min(max_pos_x)}, y_range={np.max(max_pos_y) - np.min(max_pos_y)}")
 # %%
 ################### Setup Andor Camera ###################
 wfs = AndorIXon(conf=confWFS)
@@ -89,98 +72,6 @@ wfs.start()
 wfs.setExposure(0.0625)
 
 
-#%%
-pos = {"A": 3, "B": 3}
-fsm.goTo(pos)
-time.sleep(1)
-img_q1 = wfs.read().astype(np.float64)
-time.sleep(1)
-fsm.resetPos()
-time.sleep(1)
-pos = {"A": 7, "B": 3}
-fsm.goTo(pos)
-time.sleep(1)
-img_q2 = wfs.read().astype(np.float64)
-time.sleep(1)
-fsm.resetPos()
-time.sleep(1)
-pos = {"A": 7, "B": 7}
-fsm.goTo(pos)
-time.sleep(1)
-img_q3 = wfs.read().astype(np.float64)
-time.sleep(1)
-fsm.resetPos()
-time.sleep(1)
-pos = {"A": 3, "B": 7}
-fsm.goTo(pos)
-time.sleep(1)
-img_q4 = wfs.read().astype(np.float64)
-time.sleep(1)
-fsm.resetPos()
-
-#%%
-img_high_mod = img_q1 + img_q2 + img_q3 + img_q4
-img_high_mod_bin = np.zeros(img_high_mod.shape)
-img_high_mod_bin[img_high_mod>(np.max(img_high_mod)*0.02)] = 1
-
-#%%
-pos_ret = findAllPupils2(img_high_mod_bin, quadrant_size=16)
-
-
-#%%
-f, ax = plt.subplots()
-pos_ret = [(5, 5, 5), (5, 26, 5), (26, 5, 5), (27, 26, 5)]
-ax.imshow(img_high_mod, cmap='gray', interpolation='nearest')
-for i in range(4):
-    cir = plt.Circle((pos_ret[i][0], pos_ret[i][1]), pos_ret[i][2], color='red', fill=False)
-    ax.add_artist(cir)
-
-displayOffset(img_high_mod_bin, pos_ret)
-plt.show()
-#%%
-def displayOffsetnoshow(params):
-    p0_x, p0_y, p1_x, p1_y, p2_x, p2_y, p3_x, p3_y = params
-    pupilLocs = [(np.round(p0_x), np.round(p0_y), radius_pupil), (np.round(p1_x), np.round(p1_y), radius_pupil), (np.round(p2_x), np.round(p2_y), radius_pupil), (np.round(p3_x), np.round(p3_y), radius_pupil)]
-    pupils = []
-    pupilMask = np.zeros(img.shape)
-    xx,yy = np.meshgrid(np.arange(pupilMask.shape[0]),np.arange(pupilMask.shape[1]))
-    for i, pupil_loc in enumerate(pupilLocs):
-        px, py, r = pupil_loc
-        zz = np.sqrt((xx-px)**2 + (yy-py)**2)
-        pupils.append(zz < r)
-        pupilMask += pupils[-1]*(i+1)
-    p1mask = pupilMask == 1
-    p2mask = pupilMask == 2
-    p3mask = pupilMask == 3
-    p4mask = pupilMask == 4
-
-    xx,yy = np.meshgrid(np.arange(2*r),np.arange(2*r))
-    zz = np.sqrt((xx-r)**2 + (yy-r)**2)
-    p1image = np.zeros((2*r,2*r))
-    p2image = np.zeros((2*r,2*r))
-    p3image = np.zeros((2*r,2*r))
-    p4image = np.zeros((2*r,2*r))
-    p1image[zz<r] = img_bin[p1mask]
-    p2image[zz<r] = img_bin[p2mask]
-    p3image[zz<r] = img_bin[p3mask]
-    p4image[zz<r] = img_bin[p4mask]
-    #x_slopes = (p1 + p2) - (p3 + p4)
-    #y_slopes = (p1 + p3) - (p2 + p4)
-    x_sum = np.sum(np.abs(((p1image + p2image) - (p3image + p4image))))
-    y_sum = np.sum(np.abs(((p1image + p3image) - (p2image + p4image))))
-    return x_sum+ y_sum
-
-#%%
-img = img_high_mod
-img_bin = img_high_mod_bin
-radius_pupil = 5
-pos_init  = [4, 5, 5, 27, 26, 5, 26, 26]
-for pos in range(8):
-    for i in [-1, 0, 1]:
-        cur_pos = pos_init
-        cur_pos[pos] += i
-        ret_val= displayOffsetnoshow(tuple(cur_pos))
-        print(f"val={ret_val}, with pos = {cur_pos}")
 #%%
 ################### Start modulation ###################
 fsm.start()
@@ -192,133 +83,7 @@ fsm.stop()
 #dmpsf.setExposure(500)
 
 
-#%%
-################### Pupil positioning ###################
-from scripts.pupilMask import *
 
-def findPupilPosAndRadius_forced_radius(img, size, r_forced=5):
-    # img_bin = np.zeros(img.shape) 
-    # img_bin[img>(np.max(img)*0.1)] = 1
-    img_bin = img
-    image = img_bin[:size,:size]
-    regions = measure.regionprops(measure.label(image))
-    bubble = regions[0]
-
-    y0, x0 = bubble.centroid
-    r = r_forced
-
-    def cost(params):
-        x0, y0 = params
-        coords = draw.disk((np.round(y0), np.round(x0)), r, shape=image.shape)
-        template = np.zeros_like(image)
-        template[coords] = 1
-        return -np.sum(template == image)
-
-    x0, y0 = optimize.fmin(cost, (x0, y0))
-    print(( x0, y0, r_forced))
-    return int(np.round(x0)), int(np.round(y0)), int(r_forced)
-
-def findAllPupils2(img, quadrant_size):
-    pos = []
-    x0, y0, r0 = findPupilPosAndRadius_forced_radius(img[:quadrant_size,:quadrant_size], quadrant_size)
-    pos.append((x0, y0, r0))
-    x1, y1, r1 = findPupilPosAndRadius_forced_radius(img[quadrant_size:,:quadrant_size], quadrant_size)
-    y1 += quadrant_size
-    pos.append((x1, y1, r1))
-    x2, y2, r2 = findPupilPosAndRadius_forced_radius(img[:quadrant_size,quadrant_size:], quadrant_size)
-    x2 += quadrant_size
-    pos.append((x2, y2, r2))
-    x3, y3, r3 = findPupilPosAndRadius_forced_radius(img[quadrant_size:,quadrant_size:], quadrant_size)
-    x3 += quadrant_size
-    y3 += quadrant_size
-    pos.append((x3, y3, r3))
-
-    return pos
-#%%
-def autoFindAndDisplayPupils2(wfs, quadrant_size):
-
-    numImages = 20
-    img = wfs.read().astype(np.float64)
-    for i in range(numImages-1):
-        img += wfs.read().astype(np.float64)
-    img /= numImages
-
-    img_bin = np.zeros(img.shape)
-    img_bin[img>(np.max(img)*0.04)] = 1
-    plt.imshow(img_bin)
-    plt.colorbar()
-    pos = findAllPupils2(img_bin, quadrant_size)
-    print(pos)
-
-    displayOffset(img_bin, pos)
-
-    print(pos)
-    f, ax = plt.subplots()
-    ax.imshow(img_bin, cmap='gray', interpolation='nearest')
-    for i in range(4):
-        cir = plt.Circle((pos[i][0], pos[i][1]), pos[i][2], color='red', fill=False)
-        ax.add_artist(cir)
-    plt.show()
-
-    return pos
-
-
-pupil_pos = autoFindAndDisplayPupils2(wfs, quadrant_size=16)
-
-#%%
-numImages = 20
-img = wfs.read().astype(np.float64)
-for i in range(numImages-1):
-    img += wfs.read().astype(np.float64)
-img /= numImages
-
-img_bin = np.zeros(img.shape)
-img_bin[img>(np.max(img)*0.05)] = 1
-
-
-#%%
-import scipy
-quads = np.zeros((4, 64, 64))
-quads[0,:,:] = img_bin[0:64,0:64]
-quads[1,:,:] = img_bin[64:, 0:64]
-quads[2,:,:] = img_bin[0:64, 64:]
-quads[3,:,:] = img_bin[64:, 64:]
-
-avg_offset = np.zeros((4, 4, 2))
-for q in range(4):
-    for i in range(4):
-        co = scipy.signal.convolve(quads[q,:,:], quads[i,:,:], mode="same", method="direct")
-        center = np.unravel_index(co.argmax(axis=None), co.shape)
-        avg_offset[q,i,:] += [center[0], center[1]]
-
-plt.imshow(co)
-print(avg_offset)
-
-#TODO prob need to substract 64/2 from offsets found
-#%%
-
-#  - 11,11 #22,20 # 21,22
-#  - 53,11 #107,20 #  106,22
-#  - 10,53 #22,105 # 21,107
-#  - 53,54 #107,106 # 106,107
-pos[0] = (22, 22, 17)
-pos[2] = (23, 106, 17)
-pos[1] = (107, 21, 17)
-pos[3] = (108, 106, 17)
-
-
-f, ax = plt.subplots()
-ax.imshow(img, cmap='gray', interpolation='nearest')
-for i in range(4):
-    cir = plt.Circle((pos[i][0], pos[i][1]), pos[i][2], color='red', fill=False)
-    ax.add_artist(cir)
-plt.show()
-displayOffset(img, pos)
-
-#%%
-for i in range(48):
-    fsm.step()
-    time.sleep(1)
 
 #%% 
 ################### Calculate slopes ################### 
@@ -339,9 +104,10 @@ overlayCalcPosWithPupilMask(pupil_pos, slope)
 loop = TimeResolvedLoop(conf=conf, fsm=fsm)
 
 #loop.grabRefTRSlopes()
-#%%
+# %%
+################### Compute Interaction Matrix ###################
 loop.computeIM()
-#loop.calcFrameWeights()
+wfc.flatten()
 
 #%%
 plt.figure()
@@ -354,10 +120,6 @@ plt.show()
 
 #%%
 loop.plotWeights()
-# %%
-################### Compute Interaction Matrix ###################
-loop.computeIM()
-wfc.flatten()
 
 
 #%%
@@ -400,6 +162,14 @@ loop.resetCurrentCorrection()
 
 
 
+#%% Take darks
+dmpsf.takeDark()
+dmpsf.saveDark("res/dmpsf_dark.npy")
+modpsf.takeDark()
+modpsf.saveDark("res/modpsf_dark.npy")
+wfs.takeDark()
+wfs.saveDark("res/andor_dark.npy")
+
 #%%
 import wavekit_py as wkpy
 
@@ -408,7 +178,7 @@ try :
     camera = wkpy.Camera(config_file_path = confSHWFS["confFile"])
     camera.connect()
     camera.start(0, 1)
-    camera.set_parameter_value("exposure_duration_us", 40000)
+    camera.set_parameter_value("exposure_duration_us", 15000)
 except Exception as e :
     print(str(e))
 
@@ -447,25 +217,58 @@ def grabHASOCoeffs(camera, confSHWFS, coeffs):
     values = coeffs.get_coefs_values()
     return np.array(values[0])
 
+
+def grabHASOStrehl(camera, confSHWFS):
+    img_test = camera.snap_raw_image()
+
+    try:
+        slopes = wkpy.HasoSlopes(image= img_test, config_file_path = confSHWFS["confFile"])
+    except Exception as e:
+        print(str(e))
+        print("Error: Most likely there is not enough light to determine slopes")
+        return None
+
+    filter = [False, False, False, False, False]
+    filter_array = (ctypes.c_byte * 5)()
+    for i,f in enumerate(filter):
+        filter_array[i] = ctypes.c_byte(0) if f else ctypes.c_byte(1)
+
+    phase = wkpy.Phase(hasoslopes = slopes, type_ = wkpy.E_COMPUTEPHASESET.MODAL_ZERNIKE, filter_ = filter_array, nb_coeffs=200)
+    strehl = wkpy.HasoField(config_file_path = confSHWFS["confFile"], hasoslopes=slopes, phase=phase, curv_radius=3.5, wavelength=635.0, oversampling=1)
+
+    SR = strehl.strehl(config_file_path=confSHWFS["confFile"],flat_experimental_intensity=False, flat_theoretical_intensity=False, through_focus=False, oversample=True, defocus=0)
+    
+    return SR
+
 #%%
+loop.setGain(0.1)
 wfs.activateNoise = False
 wfs.total_photon_flux = 0
 wfs.activateRONoise = False
 loop.turbulenceGenerator = None
 time.sleep(1)
-for i in range(5):
+for i in range(30):
     #loop.standardIntegratorWithTurbulence()
     loop.timeResolvedIntegratorWithTurbulence()
     time.sleep(0.1)
 
+fsm.stop()
+
+
+
 #%%
-wfc.flatten()
-loop.resetCurrentCorrection()
-
-
+dmpsf.takeModelPSF()
+dmpsf.box_size = 50
+modpsf.takeModelPSF()
+modpsf.box_size = 150
 #%%
 # Grab ref wavefront 
+
 REF_WF = grabHASOImage(camera, confSHWFS)
+for i in range(49):
+    REF_WF += grabHASOImage(camera, confSHWFS)
+
+REF_WF /= 50
 plt.imshow(REF_WF)
 plt.colorbar()
 
@@ -480,57 +283,9 @@ plt.bar(list(range(NUM_MODES)), REF_coeff)
 CUR_coeff = grabHASOCoeffs(camera, confSHWFS, NUM_MODES)
 plt.bar(list(range(NUM_MODES)), REF_coeff-CUR_coeff)
 
-
-
-
-#%%
-# Get the conversion matrix from KL space to HASO space
-fsm.stop()
-fsm.resetPos()
-wfc.flatten()
-REF_coeff = grabHASOCoeffs(camera, confSHWFS, NUM_MODES)
-
-HASO_resp = np.zeros((NUM_MODES, NUM_MODES))
-
-poke_amp = 0.02
-#For each mode
-for i in range(NUM_MODES):
-    wfc.push(i, poke_amp)
-    #Add some delay to ensure one-to-one
-    time.sleep(0.1)
-    #Burn the first new image since we were moving the DM during the exposure
-    push_coeff = grabHASOCoeffs(camera, confSHWFS, NUM_MODES)
-    #push_coeff -= REF_coeff
-
-    time.sleep(0.5)
-
-    wfc.push(i, -poke_amp)
-    #Add some delay to ensure one-to-one
-    time.sleep(0.1)
-    #Burn the first new image since we were moving the DM during the exposure
-    pull_coeff = grabHASOCoeffs(camera, confSHWFS, NUM_MODES)
-    #pull_coeff -= REF_coeff
-
-
-    #Compute the normalized difference
-    HASO_resp[i,:] = (push_coeff-pull_coeff)/(2*poke_amp)
-    time.sleep(0.5)
-
-#%%
-plt.imshow(HASO_resp, cmap = 'inferno', aspect='auto')
-plt.colorbar()
-plt.show()
 #%%
 wfc.flatten()
 loop.resetCurrentCorrection()
-
-
-#%%
-modal_gain = np.ones(68) *0.2
-modal_gain[0] = 0.3
-modal_gain[1] = 0.3
-loop.gain = modal_gain
-loop.gCM = loop.gain[:, np.newaxis]*loop.CM
 
 #%%
 ################### Turbulence ###################
@@ -566,55 +321,6 @@ phase_screen[atm.mask] =t_cmd
 plt.imshow(phase_screen)
 plt.colorbar()
 
-#%% Animate
-import matplotlib.animation as animation
-t = atm.getNextTurbAsModes()
-
-t_cmd = wfc.f_M2C@t
-phase_screen = np.zeros((11,11))
-phase_screen[atm.mask] =t_cmd 
-fig = plt.figure()
-img = plt.imshow(phase_screen)
-ann = plt.annotate(str(0), (0,0))
-plt.colorbar(img)
-def animate(i):
-    t = atm.atm[i,:]
-    t_cmd = wfc.f_M2C@t
-    phase_screen = np.zeros((11,11))
-    phase_screen[atm.mask] =t_cmd 
-    img.set_data(phase_screen)
-    img.set_clim(np.min(phase_screen), np.max(phase_screen))
-    ann.set_text(str(i))
-
-anim = animation.FuncAnimation(fig, animate, frames= 100, interval=1000/10)
-
-anim.save("test_anime3.gif", fps=10)
-
-#%% Animate with atmo
-import matplotlib.animation as animation
-
-
-
-fig = plt.figure()
-img = plt.imshow(REF_WF)
-ann = plt.annotate(str(0), (0,0))
-plt.colorbar(img)
-turb_rms = np.zeros(100)
-def animate(i):
-    t = atm.atm[i,:]
-    loop.wfcShm.write(t)
-    read_WF = ((REF_WF - grabHASOImage(camera, confSHWFS)))
-    read_WF_valid = read_WF[~np.isnan(read_WF)] 
-    rms_val = np.sqrt(np.mean(np.square(read_WF_valid - np.mean(read_WF_valid))))
-    img.set_data(read_WF)
-    img.set_clim(np.min(read_WF_valid), np.max(read_WF_valid))
-    ann.set_text(f"f={i},rms={int(rms_val*1000)}nm")
-    turb_rms[i]= rms_val
-
-anim = animation.FuncAnimation(fig, animate, frames= 10*10, interval=1000/10)
-wfc.flatten()
-loop.resetCurrentCorrection()
-anim.save("atmo.gif", fps=10)
 #%%
 atm.setSpeed(1)
 loop.setTurbulenceGenerator(atm)
@@ -623,14 +329,311 @@ loop.setTurbulenceGenerator(atm)
 #%%
 wfs.activateNoise = True
 wfs.activateRONoise = False
-wfs.total_photon_flux = 100
+wfs.total_photon_flux = 10
+
+
+
+#%%
+
+def runLoop(iterations, gain, photons_per_frame, switching_point=0, type_of_loop="tr", turb_wheel=None, delay=0):
+    # Reset wheel
+    if turb_wheel is not None:
+        c = turb_wheel
+        c('PA 60000')
+        time.sleep(1)
+        c('BG')
+        time.sleep(3)
+        print(f"Curent position = {c('TPA')}")
+        time.sleep(1)
+        c('PR ' + str(stepSize))
+        time.sleep(1)
+
+
+    # SEt Photons
+    wfs.activateNoise = True
+    wfs.activateRONoise = False
+    wfs.total_photon_flux = photons_per_frame
+
+    #Prep all arrays for recording loop
+    fsm.stop()
+    fsm.currentPos = None
+    strehls = np.zeros(iterations)
+    psf_img = np.zeros((iterations, 480, 640 ))
+    strehls_mod = np.zeros(iterations)
+    rms_plot = np.zeros(iterations)
+    rss_plot = np.zeros(iterations)
+    rms_strehl = np.zeros(iterations)
+    REF_coeff = grabHASOCoeffs(camera, confSHWFS, NUM_MODES)
+    saved_coeffs = np.zeros((iterations, NUM_MODES))
+    saved_WFs = np.zeros((iterations, REF_WF.shape[0], REF_WF.shape[1]))
+    img_slopes = []
+    current_wfc_shape = np.zeros((iterations, wfc.layout.shape[0], wfc.layout.shape[1]))
+    turb_modes  = np.zeros((iterations, NUM_MODES))
+    corr_modes  = np.zeros((iterations, NUM_MODES))
+    wavelenth = 0.635 # in um
+    residual_modes = np.zeros((iterations, NUM_MODES))
+
+    loop = TimeResolvedLoop(conf=conf, fsm=fsm)
+    loop.setDelay(delay)
+    # Reset flat 
+    wfc.flatten()
+    loop.resetCurrentCorrection()
+
+    #Set gain
+    loop.setGain(gain)
+    switched = False
+
+    if switching_point == 0:
+        match type_of_loop:
+            case "norm":
+                loop.changeWeightsAndUpdate(np.ones(loop.frame_weights.shape))
+            case "tr":
+                pass
+            case "ff":
+                loop.switchToFF()
+                loop.FF_active = True
+            case "ff_w":
+                loop.switchToFFwithWeights()
+                loop.FF_weighted_active = True
+    else:
+        #Start with norm with default 0.3 gain
+        loop.changeWeightsAndUpdate(np.ones(loop.frame_weights.shape))
+        loop.setGain(0.3)
+
+    # Run loop
+    MAX_ACT_LIMIT = 0.35
+    for i in range(iterations):
+        if np.max(np.abs(wfc.currentShape)) > MAX_ACT_LIMIT:
+            wfc.flatten()
+            loop.resetCurrentCorrection()
+            break
+        try:
+            #loop.turbulenceGenerator.currentPos +=10
+            if (not switched) and (switching_point != 0) :
+                if i > switching_point :  # switch to selected method
+                    switched=True
+                    saved_current_correction = loop.currentCorrection.copy()
+                    loop = TimeResolvedLoop(conf=conf, fsm=fsm)
+                    loop.setDelay(delay)
+                    loop.setGain(gain)
+                    match type_of_loop:
+                        case "norm":
+                            loop.changeWeightsAndUpdate(np.ones(loop.frame_weights.shape))
+                        case "tr":
+                            pass
+                        case "ff":
+                            loop.switchToFF()
+                            loop.FF_active = True
+                        case "ff_w":
+                            loop.switchToFFwithWeights()
+                            loop.FF_weighted_active = True
+                    loop.currentCorrection = saved_current_correction
+            
+            loop.timeResolvedIntegratorWithTurbulence()
+            
+            #loop.standardIntegratorWithTurbulence()
+            time.sleep(0.1)
+            if (not switched) and (switching_point != 0) :
+                if i <= switching_point :
+                    residual_modes[i,:] = calc_TR_Residual(CM=loop.CM, 
+                                                slopes_TR=loop.latest_slopes,
+                                                weights=loop.frame_weights,
+                                                ref_signal_per_mode_normed = loop.ref_signal_per_mode_normed)
+            else:
+                if type_of_loop == "norm" or type_of_loop == "tr":
+                    residual_modes[i,:] = calc_TR_Residual(CM=loop.CM, 
+                                                    slopes_TR=loop.latest_slopes,
+                                                    weights=loop.frame_weights,
+                                                    ref_signal_per_mode_normed = loop.ref_signal_per_mode_normed)
+                elif type_of_loop == "ff":
+                    residual_modes[i,:] = calc_TRFF_residual(CM=loop.CM, 
+                                    slopes_TR=loop.latest_slopes.flatten(),
+                                        ref_signal_normed = loop.ref_signal_normed)
+                elif type_of_loop == "ff_w":
+                    residual_modes[i,:] = calc_TRFF_residual_weighted(CM=loop.CM, 
+                                    slopes_TR=loop.latest_slopes,
+                                    weights=loop.frame_weights,
+                                        ref_signal_per_mode_normed = loop.ref_signal_per_mode_normed)
+            strehls[i] = dmpsf.strehl_ratio_ref()
+            psf_img[i,:,:] = dmpsf.readLong()
+            strehls_mod[i] = modpsf.strehl_ratio_ref()
+            read_WF = ((REF_WF - grabHASOImage(camera, confSHWFS)))
+            read_WF_valid = read_WF[~np.isnan(read_WF)] 
+            saved_WFs[i,:,:] = read_WF
+            rms_plot[i] = np.sqrt(np.mean(np.square(read_WF_valid - np.mean(read_WF_valid))))
+            rss_plot[i] = np.sqrt(np.sum(np.square(read_WF_valid - np.mean(read_WF_valid))))
+            rms_strehl[i] = np.exp( -(2*np.pi*rms_plot[i]/wavelenth)**2)
+            #CUR_coeff = (REF_coeff - grabHASOCoeffs(camera, confSHWFS, NUM_MODES))
+            #saved_coeffs[i,:] = CUR_coeff
+            #current_wfc_shape[i,wfc.layout] = wfc.currentShape
+            print(np.max(np.abs(wfc.currentShape)))
+            print(f"it = {i}, RMS={rms_plot[i]:.4f}, RMS_SR={rms_strehl[i]:.4f}, SR={strehls[i]:.4f}, mod_SR={strehls_mod[i]:.4f}")
+            #img_slopes.append(loop.latest_slopes)
+            #turb_modes[i,:] = loop.turbModes
+            corr_modes[i,:] = loop.latest_correction
+            if turb_wheel is not None:
+                c('BGA')
+            time.sleep(0.2)
+        except KeyboardInterrupt:
+            fsm.stop()
+            print("Stopped loop")
+            break
+    
+    # Save data
+    data = {"photon_per_frame": wfs.total_photon_flux,
+        "gain": loop.gain,
+        "strehls" : strehls,
+        "strehls_mod" : strehls_mod,
+        "rms_strehl": rms_strehl,
+        "corr_modes":corr_modes,
+        "saved_WFs":saved_WFs,
+        "rms_plot":rms_plot,
+        "rss_plot":rss_plot,
+        "slope_validSubAps":slope.validSubAps,
+        "psf_img": psf_img,
+        "residual_modes": residual_modes}
+
+    print(f"Wheel final position = {c('TPA')}")
+
+    return data
+
+#%%
+
+#data_ff_100_05g_d0_1m2 = runLoop(iterations=100, gain=0.5, photons_per_frame=100, switching_point=40, type_of_loop="ff", turb_wheel=c, delay=0)
+#data_ff_50_05g_d0_1m2 = runLoop(iterations=100, gain=0.5, photons_per_frame=50, switching_point=40, type_of_loop="ff", turb_wheel=c, delay=0)
+#data_ff_25_05g_d0_1m2 = runLoop(iterations=100, gain=0.5, photons_per_frame=25, switching_point=40, type_of_loop="ff", turb_wheel=c, delay=0)
+#data_ff_10_05g_d0_1m2 = runLoop(iterations=100, gain=0.5, photons_per_frame=10, switching_point=40, type_of_loop="ff", turb_wheel=c, delay=0)
+data_ff_5_05g_d0_1m2_offset = runLoop(iterations=100, gain=0.5, photons_per_frame=5, switching_point=40, type_of_loop="ff", turb_wheel=c, delay=0)
+#data_ff_5_07g_1m2 = runLoop(iterations=100, gain=0.7, photons_per_frame=5, switching_point=40, type_of_loop="ff", turb_wheel=c)
+#data_norm_100_03g_d2_1m2 = runLoop(iterations=100, gain=0.3, photons_per_frame=100, type_of_loop="norm", turb_wheel=c, delay=2)
+#data_norm_100_03g_d1_1m2 = runLoop(iterations=100, gain=0.3, photons_per_frame=100, type_of_loop="norm", turb_wheel=c, delay=1)
+#data_norm_100_03g_d0_1m2 = runLoop(iterations=100, gain=0.3, photons_per_frame=100, type_of_loop="norm", turb_wheel=c, delay=0)
+#data_norm_100_05g_d0_1m2 = runLoop(iterations=100, gain=0.5,  photons_per_frame=100, switching_point=40, type_of_loop="norm", turb_wheel=c, delay=0)
+#data_norm_50_03g_d0_1m2 = runLoop(iterations=100, gain=0.3, photons_per_frame=50, type_of_loop="norm", turb_wheel=c, delay=0)
+#data_norm_25_03g_d0_1m2 = runLoop(iterations=100, gain=0.3, photons_per_frame=25, type_of_loop="norm", turb_wheel=c, delay=0)
+#data_norm_10_03g_d0_1m2 = runLoop(iterations=100, gain=0.3, photons_per_frame=10, type_of_loop="norm", turb_wheel=c, delay=0)
+data_norm_5_03g_d0_1m2_offset = runLoop(iterations=100, gain=0.3, photons_per_frame=5, type_of_loop="norm", turb_wheel=c, delay=0)
+#data_norm_5_05g_1m2 = runLoop(iterations=100, gain=0.5, photons_per_frame=5,switching_point=40, type_of_loop="norm", turb_wheel=c)
+#data_ff_5_0g_1m2 = runLoop(iterations=100, gain=1.1, photons_per_frame=5, type_of_loop="ff", turb_wheel=c)
+
+#%%
+data_norm_100_03g_1m2 = data.copy()
+#%%
+strehl_stacked = calc_avg_strehl(data_ff_100_05g_d0_1m2["psf_img"][50:, :,:], dmpsf)
+print(f"Stacked strehl = {strehl_stacked}")
+strehl_stacked = calc_avg_strehl(data_ff_50_05g_d0_1m2["psf_img"][50:, :,:], dmpsf)
+print(f"Stacked strehl = {strehl_stacked}")
+strehl_stacked = calc_avg_strehl(data_ff_25_05g_d0_1m2["psf_img"][50:, :,:], dmpsf)
+print(f"Stacked strehl = {strehl_stacked}")
+strehl_stacked = calc_avg_strehl(data_ff_10_05g_d0_1m2["psf_img"][50:, :,:], dmpsf)
+print(f"Stacked strehl = {strehl_stacked}")
+
+strehl_stacked = calc_avg_strehl(data_norm_100_03g_d0_1m2["psf_img"][50:, :,:], dmpsf)
+print(f"Stacked strehl = {strehl_stacked}")
+strehl_stacked = calc_avg_strehl(data_norm_100_05g_d0_1m2["psf_img"][50:, :,:], dmpsf)
+print(f"Stacked strehl = {strehl_stacked}")
+strehl_stacked = calc_avg_strehl(data_norm_50_03g_d0_1m2["psf_img"][50:, :,:], dmpsf)
+print(f"Stacked strehl = {strehl_stacked}")
+strehl_stacked = calc_avg_strehl(data_norm_25_03g_d0_1m2["psf_img"][50:, :,:], dmpsf)
+print(f"Stacked strehl = {strehl_stacked}")
+strehl_stacked = calc_avg_strehl(data_norm_10_03g_d0_1m2["psf_img"][50:, :,:], dmpsf)
+print(f"Stacked strehl = {strehl_stacked}")
+
+
+
+strehl_stacked = calc_avg_strehl(data_ff_5_05g_d0_1m2["psf_img"][50:, :,:], dmpsf)
+print(f"Stacked strehl = {strehl_stacked}")
+
+strehl_stacked = calc_avg_strehl(data_norm_5_03g_d0_1m2["psf_img"][50:, :,:], dmpsf)
+print(f"Stacked strehl = {strehl_stacked}")
+
+
+strehl_stacked = calc_avg_strehl(data_ff_5_05g_d0_1m2_offset["psf_img"][50:, :,:], dmpsf)
+print(f"Stacked strehl = {strehl_stacked}")
+
+strehl_stacked = calc_avg_strehl(data_norm_5_03g_d0_1m2_offset["psf_img"][50:, :,:], dmpsf)
+print(f"Stacked strehl = {strehl_stacked}")
+
+
+#%%
+
+plt.figure()
+plt.plot(data_norm_5_03g_1m2["strehls"], label="norm")
+plt.plot(data_tr_5_03g_1m2["strehls"], label="tr")
+plt.legend()
+#%%
+
+fig, (ax1,ax2) = plt.subplots(2,1)
+title = "Residual mode analysis, photon=" + str(data["photon_per_frame"])
+fig.suptitle(title)
+per_mode = np.std(data["residual_modes"][50:,:], axis=0)
+
+for i in range(5):
+    ax1.plot(data["residual_modes"][:,i], label="Mode={i}")
+ax1.set_title("Residual modes for each cycle (um)")
+ax1.axhline(0, color="r", ls="--")
+
+ax2.bar(list(range(len(per_mode))), per_mode, label="Residual std per mode (last 50)")
+ax2.set_title("std")
+plt.legend()
+
+#%%
+import pickle
+
+total_data = {"dmpsf_model": dmpsf.model,
+              "modpsf_model": modpsf.model, 
+              "haso_ref": REF_WF,
+              "data_ff_100_05g_d0_1m2":data_ff_100_05g_d0_1m2,
+              "data_ff_50_05g_d0_1m2":data_ff_50_05g_d0_1m2,
+              "data_ff_25_05g_d0_1m2":data_ff_25_05g_d0_1m2,
+              "data_ff_10_05g_d0_1m2":data_ff_10_05g_d0_1m2,
+              "data_ff_5_05g_d0_1m2":data_ff_5_05g_d0_1m2,
+              "data_norm_100_03g_d0_1m2":data_norm_100_03g_d0_1m2,
+              "data_norm_100_05g_d0_1m2":data_norm_100_05g_d0_1m2,
+              "data_norm_50_03g_d0_1m2":data_norm_50_03g_d0_1m2,
+              "data_norm_25_03g_d0_1m2":data_norm_25_03g_d0_1m2,
+              "data_norm_10_03g_d0_1m2": data_norm_10_03g_d0_1m2,
+              "data_norm_5_03g_d0_1m2": data_norm_5_03g_d0_1m2,
+              "data_ff_5_05g_d0_1m2_offset": data_ff_5_05g_d0_1m2_offset,
+              "data_norm_5_03g_d0_1m2_offset":data_norm_5_03g_d0_1m2_offset,
+
+}
+with open("29aug2025_data_norm_vs_ff_switch40_1m2_0delay_turbwheel_mult_photons.pickle", 'wb') as handle:
+    pickle.dump(total_data, handle)
+
+#%%
+
+fig, (ax1,ax2) = plt.subplots(2,1)
+
+ax1.plot(data_norm_5_03g_1m2["rms_plot"]*1000, label="HASO RMS")
+ax1.set_title("WFE RMS (nm)")
+
+ax2.plot(data_norm_5_03g_1m2["strehls"], label="From DM PSF cam")
+ax2.plot(data_norm_5_03g_1m2["rms_strehl"], "--", label="From HASO RMS")
+ax2.plot(data_norm_5_03g_1m2["strehls_mod"], "-*", label="From MOD PSF cam")
+ax2.set_title("Strehl")
+plt.legend()
+fig.suptitle(f'Closed-loop performance,{data_norm_5_03g_1m2["gain"]}g', fontsize=16)
+
+#%%
+c('PA 0')
+time.sleep(1)
+c('BG')
+time.sleep(3)
+print(f"Curent position = {c('TPA')}")
+time.sleep(1)
+c('PR ' + str(stepSize))
+time.sleep(1)
 #%%
 fsm.stop()
 fsm.currentPos = None
-iterations = 70
+iterations = 100
 loop.setGain(0.5)
 strehls = np.zeros(iterations)
+psf_img = np.zeros((iterations, 480, 640 ))
+strehls_mod = np.zeros(iterations)
 rms_plot = np.zeros(iterations)
+rms_strehl = np.zeros(iterations)
 REF_coeff = grabHASOCoeffs(camera, confSHWFS, NUM_MODES)
 saved_coeffs = np.zeros((iterations, NUM_MODES))
 saved_WFs = np.zeros((iterations, REF_WF.shape[0], REF_WF.shape[1]))
@@ -638,25 +641,32 @@ img_slopes = []
 current_wfc_shape = np.zeros((iterations, wfc.layout.shape[0], wfc.layout.shape[1]))
 turb_modes  = np.zeros((iterations, NUM_MODES))
 corr_modes  = np.zeros((iterations, NUM_MODES))
+wavelenth = 0.635 # in um
 for i in range(iterations):
     try:
         #loop.turbulenceGenerator.currentPos +=10
-        loop.timeResolvedIntegratorWithTurbulence()
+        #loop.timeResolvedIntegratorWithTurbulence()
+        #c('BGA')
         #loop.standardIntegratorWithTurbulence()
         time.sleep(0.1)
-        strehls[i] = dmpsf.strehl_ratio
+        strehls[i] = dmpsf.strehl_ratio_ref()
+        psf_img[i,:,:] = dmpsf.readLong()
+        strehls_mod[i] = modpsf.strehl_ratio_ref()
         read_WF = ((REF_WF - grabHASOImage(camera, confSHWFS)))
         read_WF_valid = read_WF[~np.isnan(read_WF)] 
         saved_WFs[i,:,:] = read_WF
         rms_plot[i] = np.sqrt(np.mean(np.square(read_WF_valid - np.mean(read_WF_valid))))
-        CUR_coeff = (REF_coeff - grabHASOCoeffs(camera, confSHWFS, NUM_MODES))
-        saved_coeffs[i,:] = CUR_coeff
-        current_wfc_shape[i,wfc.layout] = wfc.currentShape
+        rms_strehl[i] = np.exp( -(2*np.pi*rms_plot[i]/wavelenth)**2)
+        #CUR_coeff = (REF_coeff - grabHASOCoeffs(camera, confSHWFS, NUM_MODES))
+        #saved_coeffs[i,:] = CUR_coeff
+        #current_wfc_shape[i,wfc.layout] = wfc.currentShape
         print(np.max(np.abs(wfc.currentShape)))
-        print(f"it = {i}, RMS={rms_plot[i]:.4f}, SR={strehls[i]:.4f}")
+        print(f"it = {i}, RMS={rms_plot[i]:.4f}, RMS_SR={rms_strehl[i]:.4f}, SR={strehls[i]:.4f}, mod_SR={strehls_mod[i]:.4f}")
         #img_slopes.append(loop.latest_slopes)
-        turb_modes[i,:] = loop.turbModes
+        #turb_modes[i,:] = loop.turbModes
         corr_modes[i,:] = loop.latest_correction
+        c('BGA')
+        time.sleep(0.1)
     except KeyboardInterrupt:
         fsm.stop()
         print("Stopped loop")
@@ -668,10 +678,103 @@ wfc.flatten()
 loop.resetCurrentCorrection()
 
 #%%
+def calc_avg_strehl( psfs, cam):
+    psf= np.mean(psfs, axis=0)
+    psf_diff = cam.model
+
+    # Find the max for PSF
+    ix, iy = np.unravel_index(np.argmax(psf), psf.shape)
+    # Box the PSF
+    psf_box = psf[ix-cam.box_size:ix+cam.box_size, iy-cam.box_size:iy+cam.box_size]
+    # Find the max for diffraction PSF
+    ix, iy = np.unravel_index(np.argmax(psf_diff), psf_diff.shape)
+    # Box the diff PSF
+    psf_diff_box = psf_diff[ix-cam.box_size:ix+cam.box_size, iy-cam.box_size:iy+cam.box_size]
+    # Normalize diffraction PSF box
+    psf_diff_box = psf_diff_box / np.max(psf_diff_box)
+    # Normalize PSF box
+    psf_box_norm = psf_box / np.sum(psf_box) * np.sum(psf_diff_box)
+    # Oversample to get true peak (using scipy.ndimage.zoom with bicubic interpolation)
+    psf_box_norm_oversampled = zoom(psf_box_norm, 4, order=3)  # order=3 for bicubic
+    # Calculate Strehl ratio
+    strehl_ratio = np.max(psf_box_norm_oversampled)
+    # Handle invalid SR values
+    if not np.isfinite(strehl_ratio) or strehl_ratio == 0:
+        strehl_ratio = np.nan
+    return strehl_ratio
+
+
+#strehl_stacked = calc_avg_strehl(loop_data_tr_10_03g_10m_wind["psf_img"][50:, :,:], dmpsf)
+#print(f"Stacked strehl = {strehl_stacked}")
+
+
+#%%
+@jit(nopython=True)
+def calc_TR_Residual(CM=np.array([[]], dtype=np.float64),  
+                       slopes_TR=np.array([[]], dtype=np.float64),
+                       weights=np.array([[]], dtype=np.float64),
+                       ref_signal_per_mode_normed=np.array([[]], dtype=np.float64),):
+    signal_per_mode = slopes_TR @ weights 
+    signal_per_mode_normed = signal_per_mode / np.sum(signal_per_mode, axis=0)
+    #TODO Might be able to optimize this with einsum
+    #new_corr = np.diag(gCM.astype(np.float64) @ (signal_per_mode_normed - ref_signal_per_mode_normed))
+    nModes = weights.shape[1]
+    new_corr = np.array([np.dot(CM.astype(np.float64)[i,:],  (signal_per_mode_normed - ref_signal_per_mode_normed)[:,i]) for  i in range(nModes)])
+
+    return new_corr
+
+@jit(nopython=True)
+def calc_TRFF_residual(CM=np.array([[]], dtype=np.float64),  
+                       slopes_TR=np.array([[]], dtype=np.float64),
+                       ref_signal_normed=np.array([[]], dtype=np.float64),):
+    signal_normed = slopes_TR / np.sum(slopes_TR)
+    #TODO Might be able to optimize this with einsum
+    new_corr = CM.astype(np.float64) @ (signal_normed - ref_signal_normed)
+    return new_corr
+#%%
+#saveFilename = f"tr_2KL_very_low_photon_14feb25_new_noise{wfs.total_photon_flux*48}photons_{loop.gain}g.pickle"
+data = {"photon_per_frame": wfs.total_photon_flux,
+        "gain": loop.gain,
+        "strehls" : strehls,
+        "strehls_mod" : strehls_mod,
+        "rms_strehl": rms_strehl,
+        "corr_modes":corr_modes,
+        "saved_WFs":saved_WFs,
+        "rms_plot":rms_plot,
+        "slope_validSubAps":slope.validSubAps,
+        "psf_img": psf_img}
+
+turbulence_data_1m2 = data.copy()
+#%%
+
+from OOPAO.tools.displayTools           import displayMap
+mod_cube = np.zeros((128, 128, 48))
+
+signal_TR = loop.getTRSlopes()
+
+# fsm.currentPos = None
+# signal_TR =  np.zeros((loop.signalSize, 48))
+# for s in range(loop.numFrames):
+#     fsm.step()
+#     signal_TR[:,s] = loop.wfsShm.read()
+
+
+#%%
+from OOPAO.tools.displayTools           import displayMap
+mod_cube = np.zeros((128, 128, 48))
+for f in range(48):
+    mod_cube[slope.p1mask, f] = loop.latest_slopes[:loop.signalSize//4,f]
+    mod_cube[slope.p2mask, f] = loop.latest_slopes[loop.signalSize//4:loop.signalSize//2,f]
+    mod_cube[slope.p3mask, f] = loop.latest_slopes[loop.signalSize//2:loop.signalSize//4*3,f]
+    mod_cube[slope.p4mask, f] = loop.latest_slopes[loop.signalSize//4*3:loop.signalSize,f]
+
+plt.imshow(np.sum(mod_cube[:,:,:], axis=2))
+displayMap(mod_cube)
+#%%
 mode_chosen = 0
 
 fig,ax=plt.subplots()
-plt.plot(turb_modes[:,mode_chosen], "r-", label=f"turb")
+#plt.plot(turb_modes[:,mode_chosen], "r-", label=f"turb")
 plt.plot(-corr_modes[:,mode_chosen], "k-", label=f"corr")
 
 # And a corresponding grid
@@ -685,50 +788,75 @@ plt.legend()
 
 fig,ax=plt.subplots()
 for mode_chosen in range(30):
-    diff = turb_modes[:,mode_chosen] +  corr_modes[:,mode_chosen]
+    #diff = turb_modes[:,mode_chosen] +  corr_modes[:,mode_chosen]
+    diff = corr_modes[:,mode_chosen]
     plt.plot(diff, label=f"{mode_chosen}")
 
 # And a corresponding grid
 ax.grid(which='both')
-fig.suptitle(f'Residual coeffs for each mode per iteration', fontsize=16)
+fig.suptitle(f'DM coeffs for each mode per iteration', fontsize=16)
 fig.legend()
 
+
 #%%
 
 fig, (ax1,ax2) = plt.subplots(2,1)
 
-ax1.plot(rms_plot*1000)
+ax1.plot(np.diff(rms_plot)*1000, label="HASO RMS")
 ax1.set_title("WFE RMS (nm)")
 
-ax2.plot(strehls)
+# ax2.plot(strehls, label="From DM PSF cam")
+# ax2.plot(rms_strehl, "--", label="From HASO RMS")
+# ax2.plot(strehls_mod, "-*", label="From MOD PSF cam")
+# ax2.set_title("Strehl")
+plt.legend()
+fig.suptitle(f'Closed-loop performance,{loop.gain}g', fontsize=16)
+#%%
+
+fig, (ax1,ax2) = plt.subplots(2,1)
+
+ax1.plot(rms_plot_norm_10_03g*1000)
+ax1.set_title("WFE RMS (nm)")
+
+ax2.plot(strehl_norm_10_03g)
 ax2.set_title("Strehl")
 
-fig.suptitle(f'Closed-loop performance', fontsize=16)
+fig.suptitle(f'Closed-loop performance NORM 10 0.3g', fontsize=16)
 
 #%%
 
 fig, (ax1,ax2) = plt.subplots(2,1)
 
-#ax1.plot(rms_plot_norm_10*1000, label="Modulated - 0.5g")
-#ax1.plot(rms_plot_norm_500_03g*1000, label="Modulated - 0.3g")
-ax1.plot(rms_plot_tr_100_05g*1000, label="TR - 0.5g")
-#ax1.plot(rms_plot_FF_10*1000, label="TR-Cube - 0.5g")
-ax1.plot(rms_plot_ff_100_05g*1000, label="TR-Cube - 0.5g")
+
+#ax1.plot(turb_rms*1000, "x--", label="Turb")
+#ax1.plot(np.abs(np.diff(turb_rms, prepend=turb_rms[0]))*1000, "o--", label="Perfect")
+
+ax1.plot(data_norm_10_03g["rms_plot"]*1000, "r", label="Modulated - 0.3g")
+#ax1.plot(rms_plot_norm_10_01g*1000, "r--",label="Modulated - 0.1g")
+#ax1.plot(rms_plot_tr_2_01g*1000, "b",label="TR - 0.1g")
+ax1.plot(data_tr_10_03g["rms_plot"]*1000, "b--", label="TR - 0.3g")
+#ax1.plot(rms_plot_ff_10_03g*1000, "g",label="TR-Cube - 0.3g")
+ax1.plot(data_ff_10_05g["rms_plot"]*1000, "g--",label="TR-Cube - 0.5g")
 ax1.set_title("WFE RMS (nm)")
 
-#ax2.plot(strehl_norm_10, label="Modulated - 0.5g")
-#ax2.plot(strehl_norm_500_03g, label="Modulated - 0.3g")
-ax2.plot(strehl_tr_100_05g, label="TR - 0.5g")
-#ax2.plot(strehl_FF_10, label="TR-Cube - 0.5g")
-ax2.plot(strehl_ff_100_05g, label="TR-Cube - 0.5g")
+#ax2.plot(turb_sr, "x--", label="Turb")
+#ax2.plot(strehl_norm_2_01g, "r",label="Modulated - 0.1g")
+ax2.plot(data_norm_10_03g["strehls"], "r--", label="Modulated - 0.3g")
+#ax2.plot(strehl_tr_2_01g, "b",label="TR - 0.1g")
+ax2.plot(data_tr_10_03g["strehls"],"b--", label="TR - 0.3g")
+#ax2.plot(strehl_ff_10_03g,"g", label="TR-Cube - 0.3g")
+ax2.plot(data_ff_10_05g["strehls"], "g--",label="TR-Cube - 0.5g")
 ax2.set_title("Strehl")
 
 ax1.legend()
 
-ax1.axvline(x=30, color='red', linestyle='--')
-ax2.axvline(x=30, color='red', linestyle='--')
+#ax1.axvline(x=30, color='red', linestyle='--')
+#ax2.axvline(x=30, color='red', linestyle='--')
 
-fig.suptitle(f'Closed-loop performance: {wfs.total_photon_flux*48} photons, gain={loop.gain}', fontsize=16)
+fig.suptitle(f'Closed-loop performance, fixed turb: {wfs.total_photon_flux*48} photons,  gain={loop.gain}', fontsize=16)
+
+#fig.suptitle(f'Closed-loop performance, fixed turb: No restrict photons,  gain={loop.gain}', fontsize=16)
+
 
 #%%
 import pickle
@@ -1137,6 +1265,100 @@ for s in range(fsm.numOfTRFrames):
 plt.imshow(np.sum(signal_TR, axis=2))
 plt.colorbar()
 
+
+
+
+
+#%%
+
+import numpy as np
+from scipy.ndimage import zoom
+def strehl_ratio_ref(psf, psf_diff, box_size):
+    '''
+    This function computes the strehl ratio (SR) from a given PSF and the diffraction reference PSF.
+    Inputs:
+    - psf: PSF for SR estimation [2d array]
+    - psf_diff: Reference diffraction PSF [2d array]
+    - box_size: Box size for SR estimation [pixels]
+    Outputs:
+    - sr: Strehl Ratio []
+    '''
+    # Find the max for PSF
+    ix, iy = np.unravel_index(np.argmax(psf), psf.shape)
+    # Box the PSF
+    psf_box = psf[ix-box_size:ix+box_size, iy-box_size:iy+box_size]
+    # Find the max for diffraction PSF
+    ix, iy = np.unravel_index(np.argmax(psf_diff), psf_diff.shape)
+    # Box the diff PSF
+    psf_diff_box = psf_diff[ix-box_size:ix+box_size, iy-box_size:iy+box_size]
+    # Normalize diffraction PSF box
+    psf_diff_box = psf_diff_box / np.max(psf_diff_box)
+    # Normalize PSF box
+    psf_box_norm = psf_box / np.sum(psf_box) * np.sum(psf_diff_box)
+    # Oversample to get true peak (using scipy.ndimage.zoom with bicubic interpolation)
+    psf_box_norm_oversampled = zoom(psf_box_norm, 4, order=3)  # order=3 for bicubic
+    # Calculate Strehl ratio
+    sr = np.max(psf_box_norm_oversampled)
+    # Handle invalid SR values
+    if not np.isfinite(sr) or sr == 0:
+        sr = np.nan
+    return sr
+
+#%%
+st = strehl_ratio_ref(dmpsf.readLong(), dmpsf.model, 50)
+print(st)
+
+
+
+#%% Linearity curves
+
+wfs.activateNoise = True
+wfs.activateRONoise = False
+wfs.total_photon_flux = 0
+
+selected_KL = 0
+amps = np.arange(-0.05, 0.05, 0.01)
+amp_resp = np.zeros(amps.shape)
+
+for i in range(len(amps)):
+    print(f"{i}/{len(amps)}")
+    fsm.stop()
+    wfc.push(selected_KL, amps[i])
+    time.sleep(0.5)
+    slopes_TR = loop.getTRSlopes()
+
+    if loop.FF_active:
+        if loop.ref_signal_normed is not None:
+            newCorrection = updateCorrectionTRFF(correction=np.zeros((loop.numModes)), 
+                                            gCM=loop.gCM, 
+                                            slopes_TR=slopes_TR.flatten(),
+                                            ref_signal_normed = loop.ref_signal_normed)
+        else:
+            print("Error: ref signal never defined, skipping loop")
+    else:
+        if loop.ref_signal_per_mode_normed is not None:
+            newCorrection = updateCorrectionTR(correction=np.zeros((loop.numModes)), 
+                                            gCM=loop.gCM, 
+                                            slopes_TR=slopes_TR,
+                                            weights=loop.frame_weights,
+                                            ref_signal_per_mode_normed = loop.ref_signal_per_mode_normed)
+        else:
+            print("Error: weighted ref signal never defined, skipping loop")
+
+    amp_resp[i] = newCorrection[selected_KL]
+
+wfc.flatten()
+loop.resetCurrentCorrection()
+
+plt.figure()
+plt.plot(amps, -amp_resp)
+plt.plot(amps, amps, "--")
+plt.show
+
+plt.figure()
+plt.plot(amps, amps+amp_resp)
+plt.plot(amps, [0]*len(amps), "--")
+plt.show
 # %%
 ################### Stop all ###################
 fsm.stop()
@@ -1163,6 +1385,23 @@ if camera is not None:
 time.sleep(1)
 dmpsf.stop()
 
+time.sleep(1)
+modpsf.stop()
+
+
+
+#%%
+slopeinfo = {}
+
+slopeinfo["p1mask"] = slope.p1mask
+slopeinfo["p2mask"] = slope.p2mask
+slopeinfo["p3mask"] = slope.p3mask
+slopeinfo["p4mask"] = slope.p4mask
+slopeinfo["valid"] = slope.validSubAps
+
+
+with open("slope_info.pickle", 'wb') as handle:
+    pickle.dump(slopeinfo, handle)
 
 #%% remove edge actuators 
 # IM = loop.IM
@@ -1177,3 +1416,4 @@ dmpsf.stop()
 # loop.CM[validAct,:] = invIM
 # loop.gCM = loop.gain*loop.CM
 # loop.fIM = np.copy(loop.IM)
+# %%

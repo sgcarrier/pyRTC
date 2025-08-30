@@ -11,8 +11,26 @@ def updateCorrectionTR(correction=np.array([], dtype=np.float64),
     signal_per_mode = slopes_TR @ weights 
     signal_per_mode_normed = signal_per_mode / np.sum(signal_per_mode, axis=0)
     #TODO Might be able to optimize this with einsum
-    new_corr = np.diag(gCM.astype(np.float64) @ (signal_per_mode_normed - ref_signal_per_mode_normed))
+    #new_corr = np.diag(gCM.astype(np.float64) @ (signal_per_mode_normed - ref_signal_per_mode_normed))
+    nModes = weights.shape[1]
+    new_corr = np.array([np.dot(gCM.astype(np.float64)[i,:],  (signal_per_mode_normed - ref_signal_per_mode_normed)[:,i]) for  i in range(nModes)])
+
     return correction - new_corr
+
+
+@jit(nopython=True)
+def calc_TR_Residual(CM=np.array([[]], dtype=np.float64),  
+                       slopes_TR=np.array([[]], dtype=np.float64),
+                       weights=np.array([[]], dtype=np.float64),
+                       ref_signal_per_mode_normed=np.array([[]], dtype=np.float64),):
+    signal_per_mode = slopes_TR @ weights 
+    signal_per_mode_normed = signal_per_mode / np.sum(signal_per_mode, axis=0)
+    #TODO Might be able to optimize this with einsum
+    #new_corr = np.diag(gCM.astype(np.float64) @ (signal_per_mode_normed - ref_signal_per_mode_normed))
+    nModes = weights.shape[1]
+    new_corr = np.array([np.dot(CM.astype(np.float64)[i,:],  (signal_per_mode_normed - ref_signal_per_mode_normed)[:,i]) for  i in range(nModes)])
+
+    return new_corr
 
 
 @jit(nopython=True)
@@ -24,6 +42,45 @@ def updateCorrectionTRFF(correction=np.array([], dtype=np.float64),
     #TODO Might be able to optimize this with einsum
     new_corr = gCM.astype(np.float64) @ (signal_normed - ref_signal_normed)
     return correction - new_corr
+
+
+
+@jit(nopython=True)
+def calc_TRFF_residual(CM=np.array([[]], dtype=np.float64),  
+                       slopes_TR=np.array([[]], dtype=np.float64),
+                       ref_signal_normed=np.array([[]], dtype=np.float64),):
+    signal_normed = slopes_TR / np.sum(slopes_TR)
+    #TODO Might be able to optimize this with einsum
+    new_corr = CM.astype(np.float64) @ (signal_normed - ref_signal_normed)
+    return new_corr
+
+
+@jit(nopython=True)
+def updateCorrectionTRFF_weighted(correction=np.array([], dtype=np.float64), 
+                       gCM=np.array([[]], dtype=np.float64),  
+                       slopes_TR=np.array([[]], dtype=np.float64),
+                       weights=np.array([[]], dtype=np.float64),
+                       ref_signal_per_mode_normed=np.array([[]], dtype=np.float64),):
+    signal_per_mode =(slopes_TR[:,:,np.newaxis] * weights[np.newaxis, :, :]).reshape(-1, weights.shape[-1]) 
+    signal_per_mode_normed = signal_per_mode / np.sum(signal_per_mode, axis=0)
+    #TODO Might be able to optimize this with einsum
+    nModes = weights.shape[1]
+    new_corr = np.array([np.dot(gCM.astype(np.float64)[i,:],  (signal_per_mode_normed - ref_signal_per_mode_normed)[:,i]) for  i in range(nModes)])
+    return correction - new_corr
+
+
+
+@jit(nopython=True)
+def calc_TRFF_residual_weighted(CM=np.array([[]], dtype=np.float64),  
+                       slopes_TR=np.array([[]], dtype=np.float64),
+                       weights=np.array([[]], dtype=np.float64),
+                       ref_signal_per_mode_normed=np.array([[]], dtype=np.float64),):
+    signal_per_mode =(slopes_TR[:,:,np.newaxis] * weights[np.newaxis, :, :]).reshape(-1, weights.shape[-1]) 
+    signal_per_mode_normed = signal_per_mode / np.sum(signal_per_mode, axis=0)
+    #TODO Might be able to optimize this with einsum
+    nModes = weights.shape[1]
+    new_corr = np.array([np.dot(CM.astype(np.float64)[i,:],  (signal_per_mode_normed - ref_signal_per_mode_normed)[:,i]) for  i in range(nModes)])
+    return new_corr
 
 class TimeResolvedLoop(Loop):
 
@@ -52,11 +109,15 @@ class TimeResolvedLoop(Loop):
 
         self.first_loop = True
 
+
+        self.delay = 0
+
         self.ref_signal_per_mode_normed = None
         self.ref_signal_normed = None
         self.frame_weights = np.ones((self.numFrames,self.numModes))
 
         self.FF_active= False
+        self.FF_weighted_active= False
 
         self.loadPushPullCube()
 
@@ -132,6 +193,20 @@ class TimeResolvedLoop(Loop):
                         self.frame_weights)
 
             self.computeCM()
+
+    def findModeOrder(self, modeNumber):
+        order = 1
+        rangeList = [0,1,2]
+        done = False
+        while not done:
+            if modeNumber in rangeList:
+                done = True
+            else:
+                rangeList = list(range(np.max(rangeList)+1,np.max(rangeList)+len(rangeList)+3))
+                order +=1
+        return order
+
+
 
     def pushPullIM_cube(self, maxNumModes=None):
 
@@ -228,11 +303,13 @@ class TimeResolvedLoop(Loop):
 
         #For each mode
         for i in range(maxNumModes):
-            print(f"pushPullRef_cube - Mode {i}/{maxNumModes}")
+
+            currentModePokeAmp = self.pokeAmp /np.sqrt(self.findModeOrder(i))
+            print(f"pushPullRef_cube - Mode {i}/{maxNumModes}, with pokeAmp={currentModePokeAmp}")
             #Reset the correction
             correction = self.flat.copy()
             #Plus amplitude
-            correction[i] = self.pokeAmp
+            correction[i] = currentModePokeAmp
             #Post a new shape to be made
             self.wfcShm.write(correction)
             #Add some delay to ensure one-to-one
@@ -253,7 +330,7 @@ class TimeResolvedLoop(Loop):
                 #tmp_plus[:,s] = tmp_plus[:,s] - ref_slopes[:,s]
 
             #minus amplitude
-            correction[i] = -self.pokeAmp
+            correction[i] = -currentModePokeAmp
             #Post a new shape to be made
             self.wfcShm.write(correction)
             #Add some delay to ensure one-to-one
@@ -307,6 +384,13 @@ class TimeResolvedLoop(Loop):
             self.signal_TR_ref[:,s] /= 10
 
 
+    def setDelay(self, newDelay):
+        if newDelay != 0:
+            self.delayed_signal = np.zeros((newDelay, self.signalSize, self.numFrames))
+            self.delay = newDelay
+        else:
+            self.delay = newDelay
+
     def timeResolvedIntegratorWithTurbulence(self):
 
         if self.turbulenceGenerator != None:
@@ -315,11 +399,11 @@ class TimeResolvedLoop(Loop):
         else:
             self.turbModes = 0
 
-        if self.first_loop:
+        if self.first_loop or (self.delay == 0):
             slopes_TR = self.getTRSlopes()
             self.latest_slopes = slopes_TR
-            self.latest_slopes_delay_1 = slopes_TR
-            self.latest_slopes_delay_2 = slopes_TR
+            for i in range(self.delay):
+                self.delayed_signal[i,:, :] = self.latest_slopes
             self.first_loop = False
 
         # Remove this next line because it would grab the current correction AND turbulence applied to the DM 
@@ -331,6 +415,16 @@ class TimeResolvedLoop(Loop):
                                                 gCM=self.gCM, 
                                                 slopes_TR=self.latest_slopes.flatten(),
                                                 ref_signal_normed = self.ref_signal_normed)
+            else:
+                print("Error: ref signal never defined, skipping loop")
+                return
+        elif self.FF_weighted_active:
+            if self.ref_signal_per_mode_normed is not None:
+                newCorrection = updateCorrectionTRFF_weighted(correction=self.currentCorrection, 
+                                                gCM=self.gCM, 
+                                                slopes_TR=self.latest_slopes,
+                                                weights=self.frame_weights,
+                                                ref_signal_per_mode_normed = self.ref_signal_per_mode_normed)
             else:
                 print("Error: ref signal never defined, skipping loop")
                 return
@@ -349,11 +443,10 @@ class TimeResolvedLoop(Loop):
         #print(f"Current correction = {newCorrection}")
         #if self.turbulenceGenerator != None:
         #    print(f"Turb : {self.turbModes}")
-
-        slopes_TR = self.getTRSlopes()
-        self.latest_slopes = self.latest_slopes_delay_2
-        self.latest_slopes_delay_2 = self.latest_slopes_delay_1
-        self.latest_slopes_delay_1 = slopes_TR
+        if self.delay != 0:
+            self.delayed_signal = np.roll(self.delayed_signal, 1, axis=0)
+            self.delayed_signal[0,:, :] = self.getTRSlopes()
+            self.latest_slopes = self.delayed_signal[-1,:, :]
         
         # Instead keep track of the currentCorrection manually instead of fetching from DM 
         #self.currentCorrection = self.newCorrection_tmp_delay_1
@@ -379,14 +472,30 @@ class TimeResolvedLoop(Loop):
         for mode in range(self.numModes):
             push_signal      = ((push_weighted[:,mode]/np.sum(push_weighted[:,mode])) - (ref_weighted[:,mode]/np.sum(ref_weighted[:,mode])))
             pull_signal      = ((pull_weighted[:,mode]/np.sum(pull_weighted[:,mode])) - (ref_weighted[:,mode]/np.sum(ref_weighted[:,mode])))
-            self.IM[:,mode]  = (push_signal - pull_signal) / (2*poke)
+            self.IM[:,mode]  = (push_signal - pull_signal) / (2*(poke/np.sqrt(self.findModeOrder(mode))))
 
         self.ref_signal_per_mode_normed = (ref_weighted ) / np.sum(ref_weighted, axis=0)
+
+
+    def modWeightsFromPushPullRef(self, push, pull, ref, pokeAmp):
+
+        numFrames =push.shape[1]
+        maxNumModes = push.shape[2]
+        weighting_cube = np.zeros((numFrames, maxNumModes))
+        for i in range(maxNumModes):
+            signal_push = (push[:,:,i]/np.sum(push[:,:,i], axis=0)) - (ref/np.sum(ref))
+            signal_pull = (pull[:,:,i]/np.sum(pull[:,:,i], axis=0)) - (ref/np.sum(ref))
+            total = (signal_push - signal_pull) / (2*(pokeAmp/np.sqrt(self.findModeOrder(i))))
+            avg_val = np.mean(total, axis=0)
+            weighting_cube[:,i] = np.sqrt(((np.mean((total-avg_val[np.newaxis,:])**2, axis=0))))
+            weighting_cube[:,i] = (weighting_cube[:,i]  / np.sum(np.abs(weighting_cube[:,i])))*numFrames
+
+        return weighting_cube
 
     def computeIM(self):
         self.pushPullRef_cube()
         
-        weighting_cube = modWeightsFromPushPullRef(self.push_cube,
+        weighting_cube = self.modWeightsFromPushPullRef(self.push_cube,
                                                    self.pull_cube,  
                                                    self.ref_slopes,
                                                    self.pokeAmp)
@@ -417,6 +526,7 @@ class TimeResolvedLoop(Loop):
 
     def switchToFF(self):
         self.FF_active= True
+        self.FF_weighted_active= False
 
         self.CM = np.zeros((self.numModes, self.signalSize*self.numFrames),dtype=self.signalDType)
 
@@ -427,9 +537,37 @@ class TimeResolvedLoop(Loop):
         for mode in range(self.numModes):
             push_signal      = ((push_flat[:,mode]/np.sum(push_flat[:,mode])) - (ref_flat/np.sum(ref_flat)))
             pull_signal      = ((pull_flat[:,mode]/np.sum(pull_flat[:,mode])) - (ref_flat/np.sum(ref_flat)))
-            self.IM[:,mode]  = (push_signal - pull_signal) / (2*self.pokeAmp)
+            if isinstance(self.pokeAmp, float):
+                self.IM[:,mode]  = (push_signal - pull_signal) / (2*(self.pokeAmp/np.sqrt(self.findModeOrder(mode))))
+            else:
+                self.IM[:,mode]  = (push_signal - pull_signal) / (2*self.pokeAmp[mode])
 
         self.ref_signal_normed = (ref_flat/np.sum(ref_flat))
+
+        self.computeCM()
+
+
+
+
+    def switchToFFwithWeights(self):
+        self.FF_weighted_active= True
+        self.FF_active= False
+
+        self.CM = np.zeros((self.numModes, self.signalSize*self.numFrames),dtype=self.signalDType)
+
+        self.IM  = np.zeros((self.signalSize*self.numFrames, self.numModes),dtype=self.signalDType)
+        # push_flat = self.push_cube.reshape(-1, self.push_cube.shape[-1])
+        # pull_flat = self.pull_cube.reshape(-1, self.pull_cube.shape[-1])
+        ref_weighted  = (self.ref_slopes[:,:,np.newaxis] * self.frame_weights[np.newaxis, :, :]).reshape(-1, self.frame_weights.shape[-1]) 
+        for mode in range(self.numModes):
+            push_signal = ((self.push_cube[:,:,mode]*self.frame_weights[np.newaxis, :, mode]).flatten()/np.sum(self.push_cube[:,:,mode]*self.frame_weights[np.newaxis,:, mode]))
+            pull_signal = ((self.pull_cube[:,:,mode]*self.frame_weights[np.newaxis, :, mode]).flatten()/np.sum(self.pull_cube[:,:,mode]*self.frame_weights[np.newaxis,:, mode]))
+            if isinstance(self.pokeAmp, float):
+                self.IM[:,mode]  = (push_signal - pull_signal) / (2*(self.pokeAmp/np.sqrt(self.findModeOrder(mode))))
+            else:
+                self.IM[:,mode]  = (push_signal - pull_signal) / (2*self.pokeAmp[mode])
+
+        self.ref_signal_per_mode_normed = (ref_weighted ) / np.sum(ref_weighted, axis=0)
 
         self.computeCM()
 

@@ -10,6 +10,7 @@ import os
 import time
 from numba import jit
 from sys import platform
+from scipy.ndimage import zoom
 
 
 class ScienceCamera:
@@ -31,6 +32,7 @@ class ScienceCamera:
         self.model = np.zeros(self.imageShape, dtype=self.psfLongDtype)
         self.modelFile = setFromConfig(conf, "modelFile", "")
         self.strehl_ratio = 0
+        self.box_size = 50
 
         self.loadDark()
         self.loadModelPSF()
@@ -40,7 +42,7 @@ class ScienceCamera:
 
         self.alive = True
         self.running = False
-
+        
         functionsToRun = conf["functions"]
         self.workThreads = []
         for i, functionName in enumerate(functionsToRun):
@@ -180,6 +182,34 @@ class ScienceCamera:
         self.strehl_ratio = np.max(current) / np.max(model)
 
         return self.strehl_ratio
+    
+
+  
+    def strehl_ratio_ref(self):
+        psf = self.readLong()
+        psf_diff = self.model
+
+        # Find the max for PSF
+        ix, iy = np.unravel_index(np.argmax(psf), psf.shape)
+        # Box the PSF
+        psf_box = psf[ix-self.box_size:ix+self.box_size, iy-self.box_size:iy+self.box_size]
+        # Find the max for diffraction PSF
+        ix, iy = np.unravel_index(np.argmax(psf_diff), psf_diff.shape)
+        # Box the diff PSF
+        psf_diff_box = psf_diff[ix-self.box_size:ix+self.box_size, iy-self.box_size:iy+self.box_size]
+        # Normalize diffraction PSF box
+        psf_diff_box = psf_diff_box / np.max(psf_diff_box)
+        # Normalize PSF box
+        psf_box_norm = psf_box / np.sum(psf_box) * np.sum(psf_diff_box)
+        # Oversample to get true peak (using scipy.ndimage.zoom with bicubic interpolation)
+        psf_box_norm_oversampled = zoom(psf_box_norm, 4, order=3)  # order=3 for bicubic
+        # Calculate Strehl ratio
+        self.strehl_ratio = np.max(psf_box_norm_oversampled)
+        # Handle invalid SR values
+        if not np.isfinite(self.strehl_ratio) or self.strehl_ratio == 0:
+            self.strehl_ratio = np.nan
+        return self.strehl_ratio
+
 
     def plot(self):
         arr = self.read()

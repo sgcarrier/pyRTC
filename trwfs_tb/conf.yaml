@@ -5,7 +5,7 @@ wfc:
   serial: "BOL106"
   numActuators: 97
   numModes: 68
-  flatFile: "res/flat_29july2025_2.npy" 
+  flatFile: "res/flat_13aug2025.npy" 
   saveFile: "res/save.npy" 
   m2cFile: "res/new_M2C_68_JP_1um_21june.npy" 
   #m2cFile: "res/M2C_POKE_69.npy" #For poking
@@ -28,17 +28,16 @@ dmpsf:
   #top: 200
   #width: 128
   #height: 128
-  darkCount: 100
+  darkCount: 1000
   darkFile: "res/dmpsf_dark.npy"
-  modelFile: "res/dmpsf_psfmodel_21_06_2024.npy"
+  #modelFile: "res/dmpsf_psfmodel_21_06_2024.npy"
   integration: 10
-  exposure: 1000
+  exposure: 4000
   bitDepth: 16
   affinity: 3
   functions:
   - expose
   - integrate
-  - computeStrehl
   
 
 
@@ -48,10 +47,10 @@ modpsf:
   serial: "12210161"
   width: 480
   height: 640
-  darkCount: 100
+  darkCount: 1000
   darkFile: "res/modpsf_dark.npy"
-  integration: 100
-  exposure: 500
+  integration: 10
+  exposure: 3500
   bitDepth: 16
   affinity: 3
   functions:
@@ -169,12 +168,12 @@ slopes:
 
 loop:
  gain: 0.5
- numDroppedModes: 38
- pokeAmp: 0.01 #
+ numDroppedModes: 18
+ pokeAmp: 0.04 #
  numItersIM: 5
  affinity: 2
  method: push-pull
- pushPullFile: "res/push_pull_01aug2025.pickle"
+ pushPullFile: "res/push_pull_22aug2025_004Amp_wAdap.pickle"
 #  IMFile: "res/IM_10feb2025_FF.npy"
 #  IMCubeFile: "res/IM_cube_10feb2025_FF.npy"
 #  weightFile : "res/frame_weights_10feb2025_FF.npy"

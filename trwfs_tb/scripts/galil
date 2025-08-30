@@ -1,0 +1,34 @@
+
+#%%
+import gclib
+g = gclib.py()
+g.GOpen('172.17.100.109 --direct -s ALL')
+
+print(g.GInfo())
+
+g.GCommand('KD 200')
+g.GCommand('KP 50') #Peportional 
+g.GCommand('KI 1')  #Integral
+g.GCommand('SP 50000')
+
+#%% Set step size
+windspeed = 10 #wind speed of the disturbance (m/s)
+frequency  = 1000 #system frequency
+roundscale = 37 # gives the distance of a full circle of the screen on sky in m
+totalSteps = 90*4096
+stepSize = round(totalSteps *(windspeed/roundscale/frequency))
+
+print(f"Step size is set to {stepSize}")
+#%%
+c = g.GCommand
+
+c('PR ' + str(stepSize))
+
+
+#%% Step
+
+c('BGA')
+
+
+#%% CLose the connection
+g.GClose()

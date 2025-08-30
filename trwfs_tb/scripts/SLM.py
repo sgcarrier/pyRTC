@@ -104,12 +104,98 @@ spider = simple_spider(300, 20)
 
 final_image = np.zeros((300, 400), dtype='uint8')
 
-final_image[:, 50:350] = spider *1
+final_image[:, 50:350] = spider *200
 
 # %%
 slm.updateArray(final_image)
 
 
 #%%
+def simple_spider_crit(x_off, y_off, x_max, y_max, thickness):
+
+
+    x, y = np.meshgrid(np.linspace(0,x_max,x_max),np.linspace(0,y_max,y_max))
+
+    spider = np.round(np.abs((x-x_off)-(y-y_off))<=thickness).astype('uint8')
+    spider += np.flip(spider, axis=1)
+    spider[spider>0] = 1
+    return spider 
+
+spider = simple_spider_crit(400, 300, 800, 600, 20)
+
+plt.imshow(spider)
+
+#%%
+X,Y = np.meshgrid(np.linspace(0,resX,resX),np.linspace(0,resY,resY))
+testIMG = np.round((2**8-1)*(0.5+0.5*np.sin(2*np.pi*X/50))).astype('uint8')
+
+X,Y = np.meshgrid(np.linspace(0,resX-1,resX),np.linspace(0,resY-1,resY))
+
+pupil_size = 250
+pupil_crit = ((X-(resX/2))**2 + (Y-(resY/2))**2 <= pupil_size**2)
+grating_crit = ((Y % 2) == 0 )
+spacing_middle_crit = (Y!=300)
+
+
+gratingIMG = (grating_crit & spacing_middle_crit).astype('uint8') *(133//2)
+pupilIMG = (pupil_crit).astype('uint8')
+
+final = gratingIMG
+final[(pupilIMG==1) & (spider==0)] = 0
+
+plt.imshow(final)
+
+#%%
+slm.updateArray(final)
+
+
+#%%
+image_path = "res/flat_slm_lsh0702233/CAL_LSH0702233_630nm.bmp"
+
+from PIL import Image
+# Open the BMP image using Pillow
+pil_image = Image.open(image_path)
+
+# Convert the Pillow Image object to a NumPy array
+# The array will have dimensions (height, width, channels) for color images
+# or (height, width) for grayscale images.
+flat_img = np.array(pil_image)
+
+slm.updateArray(flat_img)
+
+#%%
 slm.close()
+# %%
+
+
+
+import h5py
+import numpy as np
+
+# Specify the path to your .mat file
+file_path = "res/flat_slm_lsh0702233/alpha_slm_lsh0702233.mat"
+
+# Open the .mat file in read mode
+with h5py.File(file_path, 'r') as f:
+    # List the top-level keys (variables) in the .mat file
+    print("Keys in .mat file:", list(f.keys()))
+
+    data = f['alpha_tab'][:] 
+
+#%%
+
+wavelength = 635e-9
+
+alpha_tab = data
+alpha_tab[:,0] *= 1e-9 
+w1_diff = np.abs(alpha_tab[:,0] - wavelength)
+sort_idx = np.argsort(w1_diff)
+
+alpha = np.uint8((((wavelength - \
+                                alpha_tab[sort_idx[0], 0])) * \
+                               ((alpha_tab[sort_idx[1], 1] - \
+                                alpha_tab[sort_idx[0], 1])) / \
+                               ((alpha_tab[sort_idx[1], 0] - \
+                                alpha_tab[sort_idx[0], 0]))) + \
+                              alpha_tab[sort_idx[0], 1])
 # %%
