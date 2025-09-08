@@ -5,7 +5,7 @@ from pyRTC.utils import *
 import os
 
 os.chdir("/home/revoltuser/pyRTC/pyRTC")
-RECALIBRATE = False
+RECALIBRATE = True
 
 # %% Clear SHMs
 # shm_names = ["wfs", "wfsRaw", "wfc", "wfc2D", "signal", "signal2D", "psfShort", "psfLong"] #list of SHMs to reset
@@ -36,8 +36,10 @@ loop = hardwareLauncher("./Loop.py", config, N+4)
 loop.launch()
 
 # %% NCAP OPTIMIZER
-optim  = hardwareLauncher("../pyRTC/hardware/NCPAOptimizer.py", config, N+4)
-optim.launch()
+# optim  = hardwareLauncher("../pyRTC/hardware/NCPAOptimizer.py", config, N+4)
+# optim.launch()
+from pyRTC.hardware.NCPAOptimizer import NCAPOptimizer
+optim = NCAPOptimizer(read_yaml_file(config)["optimizer"], psf, slopes)
 
 # %% Calibrate
 
@@ -56,10 +58,15 @@ if RECALIBRATE == True:
     input("Is Atmosphere Out?")
 
     slopes.run("computeImageNoise")
+    slopes.setProperty("refSlopeCount", 10000)
     slopes.run("takeRefSlopes")
-    slopes.setProperty("refSlopesFile", "/home/revoltuser/pyRTC/REVOLT/ref.npy")
+    slopes.setProperty("refSlopesFile", "/home/revoltuser/pyRTC/REVOLT/refSlopes.npy")
     slopes.run("saveRefSlopes")
     wfc.run("flatten")
+
+    psf.run("takeModelPSF")
+    psf.setProperty("modelFile", "c:/Users/mcaousr/pyRTC/REVOLT/modelPSF.npy")
+    psf.run("saveModelPSF")
 
     #  STANDARD IM
     loop.setProperty("IMMethod", "push-pull")
@@ -72,8 +79,8 @@ if RECALIBRATE == True:
     wfc.run("flatten")
     time.sleep(1)
 
-    input("Is Atmosphere In?")
-    #  DOCRIME OL
+    # input("Is Atmosphere In?")
+    # #  DOCRIME OL
     loop.setProperty("IMMethod", "docrime")
     loop.setProperty("delay", 1)
     loop.setProperty("pokeAmp", 8e-3)
@@ -97,15 +104,25 @@ if RECALIBRATE == True:
     # loop.run("saveIM")
     # wfc.run("flatten")
     # time.sleep(1)
-
+#%% Optimize NCPA
+# optim.correctionMag /= 2
+for i in range(1):
+    optim.optimize(numSteps=10)
+    # optim.applyOptimum()
+# wfc.run("saveShape")
+# slopes.setProperty("refSlopeCount", 10000)
+# slopes.run("takeRefSlopes")
+# slopes.run("saveRefSlopes")
+# psf.run("takeModelPSF")
+# psf.run("saveModelPSF")
 # %% Adjust Loop
-loop.setProperty("IMFile", "/home/revoltuser/pyRTC/REVOLT/IM.npy")
+# loop.setProperty("IMFile", "/home/revoltuser/pyRTC/REVOLT/IM.npy")
 loop.run("loadIM")
 time.sleep(0.5)
 loop.setProperty("numDroppedModes", 90)
 loop.run("computeCM")
 time.sleep(0.5)
-loop.run("setGain",1e-2)
+loop.run("setGain",1e-1)
 loop.setProperty("leakyGain", 1e-2)
 # %%Launch Loop for 5 seconds
 wfc.run("flatten")
@@ -208,7 +225,7 @@ plt.imshow(a-b)
 plt.show()
 
 # %% Kill everything
-# hardware = [slopes, psfCam, wfs, wfc, loop]
+# hardware = [slopes, psf, wfs, wfc, loop]
 # for h in hardware:
 #     h.shutdown()
 #     time.sleep(1)
@@ -218,8 +235,8 @@ wfc.run("deactivateActuators",[0,1,2,3,4,5,11,12,20,21,31,32,42,43,53,54,64,65,7
 # %%
 wfc.run("reactivateActuators",[i for i in range(97)])
 # %% Strehl Monitor
-psfCam.run("computeStrehl")
-print(psfCam.getProperty("strehl_ratio"))
+psf.run("computeStrehl")
+print(psf.getProperty("strehl_ratio"))
 # %%
 
 # %%
@@ -237,7 +254,7 @@ RANGE = 2
 modelist = np.linspace(-RANGE, RANGE, numModes) #.astype(int)
 
 for ff in filelist:
-    psfs = np.empty((numModes, N, *psfCam.getProperty("imageShape")))
+    psfs = np.empty((numModes, N, *psf.getProperty("imageShape")))
     cmd = wfc.read()
     cmds = np.empty((numModes, N, *cmd.getProperty("shape")), dtype=cmd.dtype)
     wfc.flatten()
@@ -249,9 +266,9 @@ for ff in filelist:
             correction[mode] = mode * d[j, :].flatten()
             wfc.write(correction)
             #Burn some images
-            psfCam.readLong()
+            psf.readLong()
             #Save the next PSF in the dataset
-            psfs[i, j, :, :] = psfCam.readLong()
+            psfs[i, j, :, :] = psf.readLong()
             cmds[i,j,:] = correction
             wfc.flatten()
             time.sleep(0.1)
@@ -267,7 +284,7 @@ for ff in filelist:
 # plt.imshow(vsubAp)
 # plt.show()
 
-# from pyRTC.Pipeline import initExistingShm
+# from pyRTC.Pipeline mport initExistingShm
 # shm, _, _ = initExistingShm("signal2D")
 
 # x = shm.read_noblock()

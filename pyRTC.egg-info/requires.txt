@@ -1,0 +1,9 @@
+numpy
+matplotlib
+PyYaml
+numba
+scipy
+pyqt5
+argparse
+psutil
+astropy

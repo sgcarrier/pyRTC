@@ -6,31 +6,46 @@ import numpy as np
 
 class NCAPOptimizer(Optimizer):
 
-    def __init__(self, conf) -> None:
+    def __init__(self, conf, psf, slopes) -> None:
         
         self.wfcShm, self.wfcDims, self.wfcDtype = initExistingShm("wfc")
-        self.strehlShm, _, _ = initExistingShm("strehl")
+        self.psf = psf
+        self.slopes = slopes
         self.startMode = setFromConfig(conf, "startMode", 0)
         self.endMode = setFromConfig(conf, "endMode", 20)
         self.correctionMag = setFromConfig(conf, "correctionMag", 2e-3)
         self.numReads = setFromConfig(conf, "numReads", 5)
-
+        self.IM = np.load("/home/revoltuser/pyRTC/REVOLT/docrime_IM.npy")
         super().__init__(conf)
 
     def objective(self, trial):
 
         numModesCorrect = self.endMode - self.startMode
         modalCoefs = np.zeros(self.wfcDims, dtype=self.wfcDtype)
-        for i in range(self.startMode,numModesCorrect):
+        for i in range(self.startMode,self.endMode):
             modalCoefs[i] = np.float32(trial.suggest_float(f'{i}', 
                                                            -self.correctionMag,
                                                             self.correctionMag))
 
-        self.wfcShm.write(modalCoefs)
+
+
+        slopeRefs = np.load("/home/revoltuser/pyRTC/REVOLT/refSlopes.npy")
+        validSubAps = np.load("/home/revoltuser/pyRTC/REVOLT/validSubAps.npy").astype(bool)
+        slopeAdjust = np.zeros_like(slopeRefs)
+        slopeAdjust[validSubAps] = self.IM@modalCoefs
+        slopeRefs += slopeAdjust
+        np.save("/home/revoltuser/pyRTC/REVOLT/refSlopesNew.npy", slopeRefs)
+
+        self.slopes.setProperty("refSlopesFile", "/home/revoltuser/pyRTC/REVOLT/refSlopesNew.npy")
+        self.slopes.run("loadRefSlopes")
+        # self.wfcShm.write(modalCoefs)
 
         result = np.empty(self.numReads)
         for i in range(self.numReads):
-            result[i] = self.strehlShm.read()
+            tmp = self.psf.getProperty("strehl_ratio")
+            while self.psf.getProperty("strehl_ratio") == tmp:
+                time.sleep(1e-1)
+            result[i] = self.psf.getProperty("strehl_ratio")
         return np.mean(result)
     
     def applyOptimum(self):

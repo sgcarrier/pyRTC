@@ -7,7 +7,7 @@ loop:
   affinity: 2
   delay: 2
   method: push-pull
-  IMFile: "/home/revoltuser/pyRTC/REVOLT/IM.npy"
+  IMFile: "/home/revoltuser/pyRTC/REVOLT/docrime_IM.npy"
   functions: 
   - leakyIntegrator
 
@@ -38,48 +38,21 @@ slopes:
   subApSpacing: 22
   subApOffsetX: 0
   subApOffsetY: 0
-  contrast: 20
+  contrast: 0
   affinity: 4
   functions:
   - computeSignal
-
-# wfs:
-#   name: XIMEA
-#   serial: "13056250"
-#   type: PYWFS
-#   signalType: slopes
-#   pupilsRadius: 32
-#   binning: 2
-#   exposure: 3333
-#   gain: 0
-#   bitDepth: 10
-#   left: 272
-#   top: 50
-#   width: 192
-#   height: 192
-#   darkCount: 1000
-#   darkFile: "/home/whetstone/pyRTC/SHARP_LAB/dark.npy"
-#   affinity: 12
-#   flatNorm: True
-#   pupils: 
-#   - 44,57
-#   - 45,138
-#   - 150,75
-#   - 130,138
-#   functions:
-#   - expose
-#   - computeSignal
 
 wfc:
   name: "ALPAO"
   serial: "alpaoHSDM277-15-005"
   numActuators: 277
   numModes: 100
-  flatFile: "/home/revoltuser/pyRTC/REVOLT/eyeDoctor_07March2024.fits"
+  flatFile: "/home/revoltuser/pyRTC/REVOLT/wfcShape.npy" #"/home/revoltuser/pyRTC/REVOLT/eyeDoctor_07March2024.fits"
   saveFile: "/home/revoltuser/pyRTC/REVOLT/wfcShape.npy"
   m2cFile:  "/home/revoltuser/pyRTC/REVOLT/m2c.npy"
   floatingActuatorFile: "/home/revoltuser/pyRTC/REVOLT/floatingActuators.npy"
-  floatingInfluenceRadius: 0.8
+  floatingInfluenceRadius: 1.5
   affinity: 5
   commandCap: 0.8
   hardwareDelay: 0.001 #seconds
@@ -105,16 +78,12 @@ psf:
   - expose
   - integrate
 
-modulator:
-  name: 'E-727'
-  libFolder: '/opt/PI/lib64/'
-  digitalFreq: 20000 #Hz
-  frequency: 300 #Hz
-  amplitude: 1000
-  relativeAmplitude: 1
-  offsetX: 2500
-  offsetY: 2500
-  phaseOffset: 0
-  servosOn: True
-  autoZero: True
-
+optimizer:
+  name: "NCPA"
+  logdir: "ncpa_optimizer_tensorboard"
+  numSteps: 10
+  startMode: 2
+  endMode: 10
+  correctionMag: 0.01
+  numReads: 1
+  affinity: 10
