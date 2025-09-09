@@ -117,11 +117,11 @@ psf:
 optimizer:
   name: "NCPA"
   logdir: "ncpa_optimizer_tensorboard"
-  numSteps: 200
+  numSteps: 100
   startMode: 0
-  endMode: 94
-  correctionMag: 0.003
-  numReads: 10
+  endMode: 30
+  correctionMag: 0.01
+  numReads: 1
   affinity: 10
 
 # modulator:
