@@ -247,7 +247,7 @@ wfs.total_photon_flux = 0
 wfs.activateRONoise = False
 loop.turbulenceGenerator = None
 time.sleep(1)
-for i in range(30):
+for i in range(20):
     #loop.standardIntegratorWithTurbulence()
     loop.timeResolvedIntegratorWithTurbulence()
     time.sleep(0.1)
@@ -287,6 +287,27 @@ plt.bar(list(range(NUM_MODES)), REF_coeff-CUR_coeff)
 wfc.flatten()
 loop.resetCurrentCorrection()
 
+#%%
+dm_max = []
+mod_max = []
+dm_strehl = []
+mod_strehl = []
+for i in range(540):
+    dm_max.append(np.max(dmpsf.readLong()))
+    mod_max.append(np.max(modpsf.readLong()))
+    dm_strehl.append(np.max(dmpsf.strehl_ratio_ref()))
+    mod_strehl.append(np.max(modpsf.strehl_ratio_ref()))
+    time.sleep(5)
+
+#%%
+plt.plot(dm_max)
+plt.plot(mod_max)
+plt.title("Max intensity over time (45 min)")
+#%%
+
+plt.plot(dm_strehl)
+plt.plot(mod_strehl)
+plt.title("Strehl over time (45 min)")
 #%%
 ################### Turbulence ###################
 from scripts.turbulencePreGen import *
@@ -331,18 +352,53 @@ wfs.activateNoise = True
 wfs.activateRONoise = False
 wfs.total_photon_flux = 10
 
-
-
 #%%
+def getTurbulenceOfWheel(iterations, turb_wheel, wheel_pos_offset=0 ):
 
-def runLoop(iterations, gain, photons_per_frame, switching_point=0, type_of_loop="tr", turb_wheel=None, delay=0):
     # Reset wheel
     if turb_wheel is not None:
         c = turb_wheel
-        c('PA 60000')
+        c(f'PA {int(wheel_pos_offset)}')
         time.sleep(1)
         c('BG')
-        time.sleep(3)
+        time.sleep(5)
+        print(f"Curent position = {c('TPA')}")
+        time.sleep(1)
+        c('PR ' + str(stepSize))
+        time.sleep(1)
+
+    rms_plot = np.zeros(iterations)
+
+    for i in range(iterations):
+        read_WF = ((REF_WF - grabHASOImage(camera, confSHWFS)))
+        read_WF_valid = read_WF[~np.isnan(read_WF)] 
+        rms_plot[i] = np.sqrt(np.mean(np.square(read_WF_valid - np.mean(read_WF_valid))))
+
+        if turb_wheel is not None:
+            c('BGA')
+        time.sleep(0.2)
+
+    return rms_plot
+
+#%%
+rms_turb_p1 = getTurbulenceOfWheel(100, c, wheel_pos_offset=0)
+rms_turb_p2 = getTurbulenceOfWheel(100, c, wheel_pos_offset=100000)
+rms_turb_p3 = getTurbulenceOfWheel(100, c, wheel_pos_offset=200000)
+#%%
+plt.plot(rms_turb_p1, label="1")
+plt.plot(rms_turb_p2, label="2")
+plt.plot(rms_turb_p3, label="3")
+plt.legend()
+#%%
+
+def runLoop(iterations, gain, photons_per_frame, switching_point=0, type_of_loop="tr", turb_wheel=None, delay=0, wheel_pos_offset=0):
+    # Reset wheel
+    if turb_wheel is not None:
+        c = turb_wheel
+        c(f'PA {int(wheel_pos_offset)}')
+        time.sleep(1)
+        c('BG')
+        time.sleep(5)
         print(f"Curent position = {c('TPA')}")
         time.sleep(1)
         c('PR ' + str(stepSize))
@@ -448,7 +504,7 @@ def runLoop(iterations, gain, photons_per_frame, switching_point=0, type_of_loop
                 elif type_of_loop == "ff":
                     residual_modes[i,:] = calc_TRFF_residual(CM=loop.CM, 
                                     slopes_TR=loop.latest_slopes.flatten(),
-                                        ref_signal_normed = loop.ref_signal_normed)
+                                        ref_signal_normed = loop.ref_signal_normed.flatten())
                 elif type_of_loop == "ff_w":
                     residual_modes[i,:] = calc_TRFF_residual_weighted(CM=loop.CM, 
                                     slopes_TR=loop.latest_slopes,
@@ -466,8 +522,9 @@ def runLoop(iterations, gain, photons_per_frame, switching_point=0, type_of_loop
             #CUR_coeff = (REF_coeff - grabHASOCoeffs(camera, confSHWFS, NUM_MODES))
             #saved_coeffs[i,:] = CUR_coeff
             #current_wfc_shape[i,wfc.layout] = wfc.currentShape
+            photons = np.sum(loop.latest_slopes)
             print(np.max(np.abs(wfc.currentShape)))
-            print(f"it = {i}, RMS={rms_plot[i]:.4f}, RMS_SR={rms_strehl[i]:.4f}, SR={strehls[i]:.4f}, mod_SR={strehls_mod[i]:.4f}")
+            print(f"it = {i}, RMS={rms_plot[i]:.4f}, RMS_SR={rms_strehl[i]:.4f}, SR={strehls[i]:.4f}, mod_SR={strehls_mod[i]:.4f}, photons={photons:.4f}")
             #img_slopes.append(loop.latest_slopes)
             #turb_modes[i,:] = loop.turbModes
             corr_modes[i,:] = loop.latest_correction
@@ -477,7 +534,7 @@ def runLoop(iterations, gain, photons_per_frame, switching_point=0, type_of_loop
         except KeyboardInterrupt:
             fsm.stop()
             print("Stopped loop")
-            break
+            return
     
     # Save data
     data = {"photon_per_frame": wfs.total_photon_flux,
@@ -498,68 +555,378 @@ def runLoop(iterations, gain, photons_per_frame, switching_point=0, type_of_loop
     return data
 
 #%%
+from scripts.turbulencePreGen import *
+def runLoopDMTurb(iterations, gain, photons_per_frame, switching_point=0, type_of_loop="tr", delay=0, modes_to_use=50, turb_pos_offset=0):
+    ################### Turbulence ###################
+    turb = np.load("res/turb_coeff_Jun21_with_floating.npy")
 
-#data_ff_100_05g_d0_1m2 = runLoop(iterations=100, gain=0.5, photons_per_frame=100, switching_point=40, type_of_loop="ff", turb_wheel=c, delay=0)
-#data_ff_50_05g_d0_1m2 = runLoop(iterations=100, gain=0.5, photons_per_frame=50, switching_point=40, type_of_loop="ff", turb_wheel=c, delay=0)
-#data_ff_25_05g_d0_1m2 = runLoop(iterations=100, gain=0.5, photons_per_frame=25, switching_point=40, type_of_loop="ff", turb_wheel=c, delay=0)
-#data_ff_10_05g_d0_1m2 = runLoop(iterations=100, gain=0.5, photons_per_frame=10, switching_point=40, type_of_loop="ff", turb_wheel=c, delay=0)
-data_ff_5_05g_d0_1m2_offset = runLoop(iterations=100, gain=0.5, photons_per_frame=5, switching_point=40, type_of_loop="ff", turb_wheel=c, delay=0)
-#data_ff_5_07g_1m2 = runLoop(iterations=100, gain=0.7, photons_per_frame=5, switching_point=40, type_of_loop="ff", turb_wheel=c)
-#data_norm_100_03g_d2_1m2 = runLoop(iterations=100, gain=0.3, photons_per_frame=100, type_of_loop="norm", turb_wheel=c, delay=2)
-#data_norm_100_03g_d1_1m2 = runLoop(iterations=100, gain=0.3, photons_per_frame=100, type_of_loop="norm", turb_wheel=c, delay=1)
-#data_norm_100_03g_d0_1m2 = runLoop(iterations=100, gain=0.3, photons_per_frame=100, type_of_loop="norm", turb_wheel=c, delay=0)
-#data_norm_100_05g_d0_1m2 = runLoop(iterations=100, gain=0.5,  photons_per_frame=100, switching_point=40, type_of_loop="norm", turb_wheel=c, delay=0)
-#data_norm_50_03g_d0_1m2 = runLoop(iterations=100, gain=0.3, photons_per_frame=50, type_of_loop="norm", turb_wheel=c, delay=0)
-#data_norm_25_03g_d0_1m2 = runLoop(iterations=100, gain=0.3, photons_per_frame=25, type_of_loop="norm", turb_wheel=c, delay=0)
-#data_norm_10_03g_d0_1m2 = runLoop(iterations=100, gain=0.3, photons_per_frame=10, type_of_loop="norm", turb_wheel=c, delay=0)
-data_norm_5_03g_d0_1m2_offset = runLoop(iterations=100, gain=0.3, photons_per_frame=5, type_of_loop="norm", turb_wheel=c, delay=0)
-#data_norm_5_05g_1m2 = runLoop(iterations=100, gain=0.5, photons_per_frame=5,switching_point=40, type_of_loop="norm", turb_wheel=c)
-#data_ff_5_0g_1m2 = runLoop(iterations=100, gain=1.1, photons_per_frame=5, type_of_loop="ff", turb_wheel=c)
+    turb *= 1
+    turb_no_piston = turb[:,1:]
+    turb_no_piston_first_5_modes = turb_no_piston
+
+    # Remove some modes if needed
+    MODES_TO_USE = modes_to_use
+    turb_no_piston_first_5_modes[:, MODES_TO_USE:] = 0
+    
+    atm = DummyAtm(turb_no_piston_first_5_modes)
+    atm.currentPos = turb_pos_offset
+
+    # SEt Photons
+    wfs.activateNoise = True
+    wfs.activateRONoise = False
+    wfs.total_photon_flux = photons_per_frame
+
+    #Prep all arrays for recording loop
+    fsm.stop()
+    fsm.currentPos = None
+    strehls = np.zeros(iterations)
+    psf_img = np.zeros((iterations, 480, 640 ))
+    strehls_mod = np.zeros(iterations)
+    rms_plot = np.zeros(iterations)
+    rss_plot = np.zeros(iterations)
+    rms_strehl = np.zeros(iterations)
+    REF_coeff = grabHASOCoeffs(camera, confSHWFS, NUM_MODES)
+    saved_coeffs = np.zeros((iterations, NUM_MODES))
+    saved_WFs = np.zeros((iterations, REF_WF.shape[0], REF_WF.shape[1]))
+    img_slopes = []
+    current_wfc_shape = np.zeros((iterations, wfc.layout.shape[0], wfc.layout.shape[1]))
+    turb_modes  = np.zeros((iterations, NUM_MODES))
+    corr_modes  = np.zeros((iterations, NUM_MODES))
+    wavelenth = 0.635 # in um
+    residual_modes = np.zeros((iterations, NUM_MODES))
+
+    loop = TimeResolvedLoop(conf=conf, fsm=fsm)
+    print(f"Using file : {loop.push_pull_cube_file}")
+    loop.numActiveModes = MODES_TO_USE
+    loop.setTurbulenceGenerator(atm)
+    loop.setDelay(delay)
+    # Reset flat 
+    wfc.flatten()
+    loop.resetCurrentCorrection()
+
+    #Set gain
+    loop.setGain(gain)
+    switched = False
+
+    if switching_point == 0:
+        match type_of_loop:
+            case "norm":
+                loop.changeWeightsAndUpdate(np.ones(loop.frame_weights.shape))
+            case "tr":
+                pass
+            case "ff":
+                loop.switchToFF()
+                loop.FF_active = True
+            case "ff_w":
+                loop.switchToFFwithWeights()
+                loop.FF_weighted_active = True
+    else:
+        #Start with norm with default 0.3 gain
+        loop.changeWeightsAndUpdate(np.ones(loop.frame_weights.shape))
+        loop.setGain(0.3)
+
+    # Run loop
+    MAX_ACT_LIMIT = 0.35
+    for i in range(iterations):
+        if np.max(np.abs(wfc.currentShape)) > MAX_ACT_LIMIT:
+            wfc.flatten()
+            loop.resetCurrentCorrection()
+            break
+        try:
+            #loop.turbulenceGenerator.currentPos +=10
+            if (not switched) and (switching_point != 0) :
+                if i > switching_point :  # switch to selected method
+                    switched=True
+                    saved_current_correction = loop.currentCorrection.copy()
+                    loop = TimeResolvedLoop(conf=conf, fsm=fsm)
+                    loop.numActiveModes = MODES_TO_USE
+                    loop.setTurbulenceGenerator(atm)
+                    loop.setDelay(delay)
+                    loop.setGain(gain)
+                    match type_of_loop:
+                        case "norm":
+                            loop.changeWeightsAndUpdate(np.ones(loop.frame_weights.shape))
+                        case "tr":
+                            pass
+                        case "ff":
+                            loop.switchToFF()
+                            loop.FF_active = True
+                        case "ff_w":
+                            loop.switchToFFwithWeights()
+                            loop.FF_weighted_active = True
+                    loop.currentCorrection = saved_current_correction
+            
+            loop.timeResolvedIntegratorWithTurbulence()
+            
+            #loop.standardIntegratorWithTurbulence()
+            time.sleep(0.1)
+            if (not switched) and (switching_point != 0) :
+                if i <= switching_point :
+                    residual_modes[i,:] = calc_TR_Residual(CM=loop.CM, 
+                                                slopes_TR=loop.latest_slopes,
+                                                weights=loop.frame_weights,
+                                                ref_signal_per_mode_normed = loop.ref_signal_per_mode_normed)
+            else:
+                if type_of_loop == "norm" or type_of_loop == "tr":
+                    residual_modes[i,:] = calc_TR_Residual(CM=loop.CM, 
+                                                    slopes_TR=loop.latest_slopes,
+                                                    weights=loop.frame_weights,
+                                                    ref_signal_per_mode_normed = loop.ref_signal_per_mode_normed)
+                elif type_of_loop == "ff":
+                    residual_modes[i,:] = calc_TRFF_residual(CM=loop.CM, 
+                                    slopes_TR=loop.latest_slopes.flatten(),
+                                        ref_signal_normed = loop.ref_signal_normed.flatten())
+                elif type_of_loop == "ff_w":
+                    residual_modes[i,:] = calc_TRFF_residual_weighted(CM=loop.CM, 
+                                    slopes_TR=loop.latest_slopes,
+                                    weights=loop.frame_weights,
+                                        ref_signal_per_mode_normed = loop.ref_signal_per_mode_normed)
+            strehls[i] = dmpsf.strehl_ratio_ref()
+            psf_img[i,:,:] = dmpsf.readLong()
+            strehls_mod[i] = modpsf.strehl_ratio_ref()
+            read_WF = ((REF_WF - grabHASOImage(camera, confSHWFS)))
+            read_WF_valid = read_WF[~np.isnan(read_WF)] 
+            saved_WFs[i,:,:] = read_WF
+            rms_plot[i] = np.sqrt(np.mean(np.square(read_WF_valid - np.mean(read_WF_valid))))
+            rss_plot[i] = np.sqrt(np.sum(np.square(read_WF_valid - np.mean(read_WF_valid))))
+            rms_strehl[i] = np.exp( -(2*np.pi*rms_plot[i]/wavelenth)**2)
+            #CUR_coeff = (REF_coeff - grabHASOCoeffs(camera, confSHWFS, NUM_MODES))
+            #saved_coeffs[i,:] = CUR_coeff
+            #current_wfc_shape[i,wfc.layout] = wfc.currentShape
+            photons = np.sum(loop.latest_slopes)
+            print(np.max(np.abs(wfc.currentShape)))
+            print(f"it = {i}, RMS={rms_plot[i]:.4f}, RMS_SR={rms_strehl[i]:.4f}, SR={strehls[i]:.4f}, mod_SR={strehls_mod[i]:.4f}, photons={photons:.4f}")
+            #img_slopes.append(loop.latest_slopes)
+            turb_modes[i,:] = loop.turbModes
+            corr_modes[i,:] = loop.latest_correction
+            
+            time.sleep(0.2)
+        except KeyboardInterrupt:
+            fsm.stop()
+            print("Stopped loop")
+            return
+    
+    # Save data
+    data = {"photon_per_frame": wfs.total_photon_flux,
+        "gain": loop.gain,
+        "strehls" : strehls,
+        "strehls_mod" : strehls_mod,
+        "rms_strehl": rms_strehl,
+        "corr_modes":corr_modes,
+        "saved_WFs":saved_WFs,
+        "rms_plot":rms_plot,
+        "rss_plot":rss_plot,
+        "slope_validSubAps":slope.validSubAps,
+        "psf_img": psf_img,
+        "turb_modes":turb_modes,
+        "residual_modes": residual_modes}
+
+
+    return data
+#%%
+
+wfs.activateNoise = True
+wfs.activateRONoise = False
+photon_fluxes = [0, 100, 50, 25, 10, 5, 2]
+amps = np.arange(-0.05, 0.05, 0.01)
+reps = 20
+resp_data = np.zeros((len(photon_fluxes), len(amps), reps, loop.signalSize, loop.numFrames))
+selected_KL = 0
+
+for i in range(len(amps)):
+    fsm.stop()
+    wfc.push(selected_KL, amps[i])
+    time.sleep(1.0)
+    for j in range(len(photon_fluxes)):
+        wfs.total_photon_flux = photon_fluxes[j]
+        time.sleep(0.2)
+        for r in range(reps):
+            print(f"amp={i}/{len(amps)}, p={j}/{len(photon_fluxes)}, r={r}/{reps}")
+            slopes_TR = loop.getTRSlopes()
+            resp_data[j, i, r, :, :] = slopes_TR
 
 #%%
-data_norm_100_03g_1m2 = data.copy()
+data_to_save ={}
+data_to_save["data"] = resp_data
+data_to_save["amps"] = amps
+data_to_save["KL"] = selected_KL
+data_to_save["photons"] = photon_fluxes
+data_to_save["samples"] = reps
+with open("linear_response_multi_samples.pickle", 'wb') as handle:
+    pickle.dump(data_to_save, handle)
 #%%
-strehl_stacked = calc_avg_strehl(data_ff_100_05g_d0_1m2["psf_img"][50:, :,:], dmpsf)
-print(f"Stacked strehl = {strehl_stacked}")
-strehl_stacked = calc_avg_strehl(data_ff_50_05g_d0_1m2["psf_img"][50:, :,:], dmpsf)
-print(f"Stacked strehl = {strehl_stacked}")
-strehl_stacked = calc_avg_strehl(data_ff_25_05g_d0_1m2["psf_img"][50:, :,:], dmpsf)
-print(f"Stacked strehl = {strehl_stacked}")
-strehl_stacked = calc_avg_strehl(data_ff_10_05g_d0_1m2["psf_img"][50:, :,:], dmpsf)
-print(f"Stacked strehl = {strehl_stacked}")
 
-strehl_stacked = calc_avg_strehl(data_norm_100_03g_d0_1m2["psf_img"][50:, :,:], dmpsf)
-print(f"Stacked strehl = {strehl_stacked}")
-strehl_stacked = calc_avg_strehl(data_norm_100_05g_d0_1m2["psf_img"][50:, :,:], dmpsf)
-print(f"Stacked strehl = {strehl_stacked}")
-strehl_stacked = calc_avg_strehl(data_norm_50_03g_d0_1m2["psf_img"][50:, :,:], dmpsf)
-print(f"Stacked strehl = {strehl_stacked}")
-strehl_stacked = calc_avg_strehl(data_norm_25_03g_d0_1m2["psf_img"][50:, :,:], dmpsf)
-print(f"Stacked strehl = {strehl_stacked}")
-strehl_stacked = calc_avg_strehl(data_norm_10_03g_d0_1m2["psf_img"][50:, :,:], dmpsf)
-print(f"Stacked strehl = {strehl_stacked}")
+
+stepSize = 15
+data_ff_5_03g_d0_1m2_p3 = runLoop(iterations=100, gain=0.3, photons_per_frame=5, switching_point=40, type_of_loop="ff", turb_wheel=c, delay=0, wheel_pos_offset=200000)
+data_norm_5_03g_d0_1m2_p3 = runLoop(iterations=100, gain=0.3, photons_per_frame=5, switching_point=40, type_of_loop="norm", turb_wheel=c, delay=0, wheel_pos_offset=200000)
+
+data_ff_5_03g_d0_1m2_p4 = runLoop(iterations=100, gain=0.3, photons_per_frame=5, switching_point=40, type_of_loop="ff", turb_wheel=c, delay=0, wheel_pos_offset=300000)
+data_norm_5_03g_d0_1m2_p4 = runLoop(iterations=100, gain=0.3, photons_per_frame=5, switching_point=40, type_of_loop="norm", turb_wheel=c, delay=0, wheel_pos_offset=300000)
+
+
+data_ff_5_01g_d0_1m2_p3 = runLoop(iterations=100, gain=0.1, photons_per_frame=5, switching_point=40, type_of_loop="ff", turb_wheel=c, delay=0, wheel_pos_offset=200000)
+data_norm_5_01g_d0_1m2_p3 = runLoop(iterations=100, gain=0.1, photons_per_frame=5, switching_point=40, type_of_loop="norm", turb_wheel=c, delay=0, wheel_pos_offset=200000)
+
+data_ff_5_01g_d0_1m2_p4 = runLoop(iterations=100, gain=0.1, photons_per_frame=5, switching_point=40, type_of_loop="ff", turb_wheel=c, delay=0, wheel_pos_offset=300000)
+data_norm_5_01g_d0_1m2_p4 = runLoop(iterations=100, gain=0.1, photons_per_frame=5, switching_point=40, type_of_loop="norm", turb_wheel=c, delay=0, wheel_pos_offset=300000)
 
 
 
-strehl_stacked = calc_avg_strehl(data_ff_5_05g_d0_1m2["psf_img"][50:, :,:], dmpsf)
-print(f"Stacked strehl = {strehl_stacked}")
+data_ff_50_03g_d0_1m2_p3 = runLoop(iterations=100, gain=0.3, photons_per_frame=50, switching_point=40, type_of_loop="ff", turb_wheel=c, delay=0, wheel_pos_offset=200000)
+data_norm_50_03g_d0_1m2_p3 = runLoop(iterations=100, gain=0.3, photons_per_frame=50, switching_point=40, type_of_loop="norm", turb_wheel=c, delay=0, wheel_pos_offset=200000)
 
-strehl_stacked = calc_avg_strehl(data_norm_5_03g_d0_1m2["psf_img"][50:, :,:], dmpsf)
-print(f"Stacked strehl = {strehl_stacked}")
+data_ff_50_03g_d0_1m2_p4 = runLoop(iterations=100, gain=0.3, photons_per_frame=50, switching_point=40, type_of_loop="ff", turb_wheel=c, delay=0, wheel_pos_offset=300000)
+data_norm_50_03g_d0_1m2_p4 = runLoop(iterations=100, gain=0.3, photons_per_frame=50, switching_point=40, type_of_loop="norm", turb_wheel=c, delay=0, wheel_pos_offset=300000)
 
 
-strehl_stacked = calc_avg_strehl(data_ff_5_05g_d0_1m2_offset["psf_img"][50:, :,:], dmpsf)
-print(f"Stacked strehl = {strehl_stacked}")
+# data_ff_50_01g_d0_1m2_p1 = runLoop(iterations=100, gain=0.1, photons_per_frame=50, switching_point=40, type_of_loop="ff", turb_wheel=c, delay=0, wheel_pos_offset=0)
+# data_norm_50_01g_d0_1m2_p1 = runLoop(iterations=100, gain=0.1, photons_per_frame=50, switching_point=40, type_of_loop="norm", turb_wheel=c, delay=0, wheel_pos_offset=0)
 
-strehl_stacked = calc_avg_strehl(data_norm_5_03g_d0_1m2_offset["psf_img"][50:, :,:], dmpsf)
-print(f"Stacked strehl = {strehl_stacked}")
+# data_ff_50_01g_d0_1m2_p2 = runLoop(iterations=100, gain=0.1, photons_per_frame=50, switching_point=40, type_of_loop="ff", turb_wheel=c, delay=0, wheel_pos_offset=100000)
+# data_norm_50_01g_d0_1m2_p2 = runLoop(iterations=100, gain=0.1, photons_per_frame=50, switching_point=40, type_of_loop="norm", turb_wheel=c, delay=0, wheel_pos_offset=100000)
 
+#data_ff_5_09g_d0_1m2_p1 = runLoop(iterations=100, gain=0.9, photons_per_frame=5, switching_point=40, type_of_loop="ff", turb_wheel=c, delay=0, wheel_pos_offset=0)
+# data_tr_5_05g_d0_1m2_p1 = runLoop(iterations=100, gain=0.5, photons_per_frame=5, switching_point=40, type_of_loop="tr", turb_wheel=c, delay=0, wheel_pos_offset=0)
+# data_norm_5_05g_d0_1m2_p1 = runLoop(iterations=100, gain=0.5, photons_per_frame=5, switching_point=40, type_of_loop="norm", turb_wheel=c, delay=0, wheel_pos_offset=0)
+
+
+#data_ff_5_05g_d0_8m0_p1 = runLoop(iterations=100, gain=0.5, photons_per_frame=5, switching_point=40, type_of_loop="ff", turb_wheel=c, delay=0, wheel_pos_offset=0)
+#data_tr_5_05g_d0_8m0_p1 = runLoop(iterations=100, gain=0.5, photons_per_frame=5, switching_point=40, type_of_loop="tr", turb_wheel=c, delay=0, wheel_pos_offset=0)
+#data_norm_5_05g_d0_8m0_p1 = runLoop(iterations=100, gain=0.5, photons_per_frame=5, switching_point=40, type_of_loop="norm", turb_wheel=c, delay=0, wheel_pos_offset=0)
+
+
+
+#data_ff_5_05g_d0_8m0_p2 = runLoop(iterations=100, gain=0.5, photons_per_frame=5, switching_point=40, type_of_loop="ff", turb_wheel=c, delay=0, wheel_pos_offset=100000)
+# data_ff_5_05g_d0_8m0_p3 = runLoop(iterations=100, gain=0.5, photons_per_frame=5, switching_point=40, type_of_loop="ff", turb_wheel=c, delay=0, wheel_pos_offset=200000)
+
+#data_tr_100_01g_d0_fixed_p1 = runLoop(iterations=100, gain=0.1, photons_per_frame=100, switching_point=40, type_of_loop="tr", turb_wheel=c, delay=0, wheel_pos_offset=0)
+#data_tr_10_05g_d0_8m0_10KL_p3 = runLoop(iterations=100, gain=0.5, photons_per_frame=10, switching_point=40, type_of_loop="tr", turb_wheel=c, delay=0, wheel_pos_offset=200000)
+#data_tr_10_07g_d0_8m0_10KL_p3 = runLoop(iterations=100, gain=0.7, photons_per_frame=10, switching_point=40, type_of_loop="tr", turb_wheel=c, delay=0, wheel_pos_offset=200000)
+
+
+# data_ff_5_05g_50KL_dmturb = runLoopDMTurb(iterations=100, gain=0.5, photons_per_frame=5, switching_point=40, type_of_loop="ff", delay=0,modes_to_use=50, turb_pos_offset=0)
+# data_norm_5_05g_50KL_dmturb = runLoopDMTurb(iterations=100, gain=0.5, photons_per_frame=5, switching_point=40, type_of_loop="norm", delay=0,modes_to_use=50, turb_pos_offset=0)
+# data_tr_5_05g_50KL_dmturb = runLoopDMTurb(iterations=100, gain=0.5, photons_per_frame=5, switching_point=40, type_of_loop="tr", delay=0,modes_to_use=50, turb_pos_offset=0)
+
+
+# data_ff_5_01g_50KL_dmturb = runLoopDMTurb(iterations=100, gain=0.1, photons_per_frame=5, switching_point=40, type_of_loop="ff", delay=0,modes_to_use=50, turb_pos_offset=0)
+# data_norm_5_01g_50KL_dmturb = runLoopDMTurb(iterations=100, gain=0.1, photons_per_frame=5, switching_point=40, type_of_loop="norm", delay=0,modes_to_use=50, turb_pos_offset=0)
+# data_tr_5_01g_50KL_dmturb = runLoopDMTurb(iterations=100, gain=0.1, photons_per_frame=5, switching_point=40, type_of_loop="tr", delay=0,modes_to_use=50, turb_pos_offset=0)
+
+
+
+# data_ff_10_03g_50KL_dmturb = runLoopDMTurb(iterations=100, gain=0.3, photons_per_frame=10, switching_point=40, type_of_loop="ff", delay=0,modes_to_use=50, turb_pos_offset=0)
+# data_norm_10_03g_50KL_dmturb = runLoopDMTurb(iterations=100, gain=0.3, photons_per_frame=10, switching_point=40, type_of_loop="norm", delay=0,modes_to_use=50, turb_pos_offset=0)
+# data_tr_10_03g_50KL_dmturb = runLoopDMTurb(iterations=100, gain=0.3, photons_per_frame=10, switching_point=40, type_of_loop="tr", delay=0,modes_to_use=50, turb_pos_offset=0)
+
+
+#data_ff_5_03g_50KL_dmturb = runLoopDMTurb(iterations=100, gain=0.3, photons_per_frame=5, switching_point=40, type_of_loop="ff", delay=0,modes_to_use=50, turb_pos_offset=0)
+#data_norm_5_03g_50KL_dmturb = runLoopDMTurb(iterations=100, gain=0.3, photons_per_frame=5, switching_point=40, type_of_loop="norm", delay=0,modes_to_use=50, turb_pos_offset=0)
+#data_tr_5_03g_50KL_dmturb = runLoopDMTurb(iterations=100, gain=0.3, photons_per_frame=5, switching_point=40, type_of_loop="tr", delay=0,modes_to_use=50, turb_pos_offset=0)
+
+
+#data_ff_5_01g_d0_8m0_p3 = runLoop(iterations=100, gain=0.1, photons_per_frame=5, switching_point=40, type_of_loop="ff", turb_wheel=c, delay=0, wheel_pos_offset=200000)
+
+
+
+#data_norm_40_05g_d0_8m0_p1 = runLoop(iterations=100, gain=0.5, photons_per_frame=40, switching_point=40, type_of_loop="norm", turb_wheel=c, delay=0, wheel_pos_offset=0)
+#data_norm_5_01g_d0_8m0_p2 = runLoop(iterations=100, gain=0.1, photons_per_frame=5, switching_point=40, type_of_loop="norm", turb_wheel=c, delay=0, wheel_pos_offset=100000)
+#data_norm_5_01g_d0_fixed_p1 = runLoop(iterations=100, gain=0.3, photons_per_frame=5, switching_point=40, type_of_loop="norm", turb_wheel=c, delay=0, wheel_pos_offset=0)
+#data_norm_10_05g_d0_8m0_10KLp3 = runLoop(iterations=100, gain=0.5, photons_per_frame=10, switching_point=40, type_of_loop="norm", turb_wheel=c, delay=0, wheel_pos_offset=200000)
+
+
+#%%
+data_ff_5_07g_d0_8m0_p1 = runLoop(iterations=100, gain=0.7, photons_per_frame=5, switching_point=40, type_of_loop="ff", turb_wheel=c, delay=0, wheel_pos_offset=0)
+#data_tr_5_01g_d0_8m0_p1 = runLoop(iterations=100, gain=0.1, photons_per_frame=5, switching_point=40, type_of_loop="tr", turb_wheel=c, delay=0, wheel_pos_offset=0)
+#data_norm_5_01g_d0_8m0_p1 = runLoop(iterations=100, gain=0.1, photons_per_frame=5, switching_point=40, type_of_loop="norm", turb_wheel=c, delay=0, wheel_pos_offset=0)
+
+
+#data_ff_100_07g_50KL_dmturb = runLoopDMTurb(iterations=100, gain=0.7, photons_per_frame=100, switching_point=40, type_of_loop="ff", delay=0,modes_to_use=50, turb_pos_offset=0)
+#data_norm_100_07g_50KL_dmturb = runLoopDMTurb(iterations=100, gain=0.7, photons_per_frame=100, switching_point=40, type_of_loop="norm", delay=0,modes_to_use=50, turb_pos_offset=0)
+# data_tr_10_01g_50KL_dmturb = runLoopDMTurb(iterations=100, gain=0.1, photons_per_frame=10, switching_point=40, type_of_loop="tr", delay=0,modes_to_use=50, turb_pos_offset=0)
+
+# data_ff_10_07g_50KL_dmturb = runLoopDMTurb(iterations=100, gain=0.7, photons_per_frame=10, switching_point=40, type_of_loop="ff", delay=0,modes_to_use=50, turb_pos_offset=0)
+
+# data_ff_20_03g_50KL_dmturb = runLoopDMTurb(iterations=100, gain=0.3, photons_per_frame=20, switching_point=40, type_of_loop="ff", delay=0,modes_to_use=50, turb_pos_offset=0)
+# data_norm_20_03g_50KL_dmturb = runLoopDMTurb(iterations=100, gain=0.3, photons_per_frame=20, switching_point=40, type_of_loop="norm", delay=0,modes_to_use=50, turb_pos_offset=0)
+# data_tr_20_03g_50KL_dmturb = runLoopDMTurb(iterations=100, gain=0.3, photons_per_frame=20, switching_point=40, type_of_loop="tr", delay=0,modes_to_use=50, turb_pos_offset=0)
+
+# data_ff_20_05g_50KL_dmturb = runLoopDMTurb(iterations=100, gain=0.5, photons_per_frame=20, switching_point=40, type_of_loop="ff", delay=0,modes_to_use=50, turb_pos_offset=0)
+# data_norm_20_05g_50KL_dmturb = runLoopDMTurb(iterations=100, gain=0.5, photons_per_frame=20, switching_point=40, type_of_loop="norm", delay=0,modes_to_use=50, turb_pos_offset=0)
+# data_tr_20_05g_50KL_dmturb = runLoopDMTurb(iterations=100, gain=0.5, photons_per_frame=20, switching_point=40, type_of_loop="tr", delay=0,modes_to_use=50, turb_pos_offset=0)
+
+# data_ff_20_07g_50KL_dmturb = runLoopDMTurb(iterations=100, gain=0.7, photons_per_frame=20, switching_point=40, type_of_loop="ff", delay=0,modes_to_use=50, turb_pos_offset=0)
+
+#data_ff_5_05g_50KL_dmturb = runLoopDMTurb(iterations=100, gain=0.5, photons_per_frame=5, switching_point=40, type_of_loop="ff", delay=0,modes_to_use=50, turb_pos_offset=0)
+#data_norm_5_05g_50KL_dmturb = runLoopDMTurb(iterations=100, gain=0.5, photons_per_frame=5, switching_point=40, type_of_loop="norm", delay=0,modes_to_use=50, turb_pos_offset=0)
+#data_tr_5_05g_50KL_dmturb = runLoopDMTurb(iterations=100, gain=0.5, photons_per_frame=5, switching_point=40, type_of_loop="tr", delay=0,modes_to_use=50, turb_pos_offset=0)
+
+#%%
+
+
+strehl_stacked = calc_avg_strehl(data_ff_5_03g_d0_1m2_p1["psf_img"][50:, :,:], dmpsf)
+print(f"data_ff_5_03g_d0_1m2_p1 strehl = {strehl_stacked}")
+strehl_stacked = calc_avg_strehl(data_norm_5_03g_d0_1m2_p1["psf_img"][50:, :,:], dmpsf)
+print(f"data_norm_5_03g_d0_1m2_p1 strehl = {strehl_stacked}")
+strehl_stacked = calc_avg_strehl(data_ff_5_03g_d0_1m2_p2["psf_img"][50:, :,:], dmpsf)
+print(f"data_ff_5_03g_d0_1m2_p2 strehl = {strehl_stacked}")
+strehl_stacked = calc_avg_strehl(data_norm_5_03g_d0_1m2_p2["psf_img"][50:, :,:], dmpsf)
+print(f"data_norm_5_03g_d0_1m2_p2 strehl = {strehl_stacked}")
+
+
+strehl_stacked = calc_avg_strehl(data_ff_5_03g_d0_1m2_p3["psf_img"][50:, :,:], dmpsf)
+print(f"data_ff_5_03g_d0_1m2_p3 strehl = {strehl_stacked}")
+strehl_stacked = calc_avg_strehl(data_norm_5_03g_d0_1m2_p3["psf_img"][50:, :,:], dmpsf)
+print(f"data_norm_5_03g_d0_1m2_p3 strehl = {strehl_stacked}")
+
+strehl_stacked = calc_avg_strehl(data_ff_5_03g_d0_1m2_p4["psf_img"][50:, :,:], dmpsf)
+print(f"data_ff_5_03g_d0_1m2_p4 strehl = {strehl_stacked}")
+strehl_stacked = calc_avg_strehl(data_norm_5_03g_d0_1m2_p4["psf_img"][50:, :,:], dmpsf)
+print(f"data_norm_5_03g_d0_1m2_p4 strehl = {strehl_stacked}")
+
+
+strehl_stacked = calc_avg_strehl(data_ff_5_01g_d0_1m2_p1["psf_img"][50:, :,:], dmpsf)
+print(f"data_ff_5_01g_d0_1m2_p1 strehl = {strehl_stacked}")
+strehl_stacked = calc_avg_strehl(data_norm_5_01g_d0_1m2_p1["psf_img"][50:, :,:], dmpsf)
+print(f"data_norm_5_01g_d0_1m2_p1 strehl = {strehl_stacked}")
+strehl_stacked = calc_avg_strehl(data_ff_5_01g_d0_1m2_p2["psf_img"][50:, :,:], dmpsf)
+print(f"data_ff_5_01g_d0_1m2_p2 strehl = {strehl_stacked}")
+strehl_stacked = calc_avg_strehl(data_norm_5_01g_d0_1m2_p2["psf_img"][50:, :,:], dmpsf)
+print(f"data_norm_5_01g_d0_1m2_p2 strehl = {strehl_stacked}")
+
+strehl_stacked = calc_avg_strehl(data_ff_5_01g_d0_1m2_p3["psf_img"][50:, :,:], dmpsf)
+print(f"data_ff_5_01g_d0_1m2_p3 strehl = {strehl_stacked}")
+strehl_stacked = calc_avg_strehl(data_norm_5_01g_d0_1m2_p3["psf_img"][50:, :,:], dmpsf)
+print(f"data_norm_5_01g_d0_1m2_p3 strehl = {strehl_stacked}")
+strehl_stacked = calc_avg_strehl(data_ff_5_01g_d0_1m2_p4["psf_img"][50:, :,:], dmpsf)
+print(f"data_ff_5_01g_d0_1m2_p4 strehl = {strehl_stacked}")
+strehl_stacked = calc_avg_strehl(data_norm_5_01g_d0_1m2_p4["psf_img"][50:, :,:], dmpsf)
+print(f"data_norm_5_01g_d0_1m2_p4 strehl = {strehl_stacked}")
+
+strehl_stacked = calc_avg_strehl(data_ff_50_03g_d0_1m2_p1["psf_img"][50:, :,:], dmpsf)
+print(f"data_ff_50_03g_d0_1m2_p1 strehl = {strehl_stacked}")
+strehl_stacked = calc_avg_strehl(data_norm_50_03g_d0_1m2_p1["psf_img"][50:, :,:], dmpsf)
+print(f"data_norm_50_03g_d0_1m2_p1 strehl = {strehl_stacked}")
+strehl_stacked = calc_avg_strehl(data_ff_50_03g_d0_1m2_p2["psf_img"][50:, :,:], dmpsf)
+print(f"data_ff_50_03g_d0_1m2_p2 strehl = {strehl_stacked}")
+strehl_stacked = calc_avg_strehl(data_norm_50_03g_d0_1m2_p2["psf_img"][50:, :,:], dmpsf)
+print(f"data_norm_50_03g_d0_1m2_p2 strehl = {strehl_stacked}")
+
+strehl_stacked = calc_avg_strehl(data_ff_50_03g_d0_1m2_p3["psf_img"][50:, :,:], dmpsf)
+print(f"data_ff_50_03g_d0_1m2_p3 strehl = {strehl_stacked}")
+strehl_stacked = calc_avg_strehl(data_norm_50_03g_d0_1m2_p3["psf_img"][50:, :,:], dmpsf)
+print(f"data_norm_50_03g_d0_1m2_p3 strehl = {strehl_stacked}")
+
+strehl_stacked = calc_avg_strehl(data_ff_50_03g_d0_1m2_p4["psf_img"][50:, :,:], dmpsf)
+print(f"data_ff_50_03g_d0_1m2_p4 strehl = {strehl_stacked}")
+strehl_stacked = calc_avg_strehl(data_norm_50_03g_d0_1m2_p4["psf_img"][50:, :,:], dmpsf)
+print(f"data_norm_50_03g_d0_1m2_p4 strehl = {strehl_stacked}")
 
 #%%
 
 plt.figure()
-plt.plot(data_norm_5_03g_1m2["strehls"], label="norm")
-plt.plot(data_tr_5_03g_1m2["strehls"], label="tr")
+plt.plot(data_norm_5_03g_d0_1m2_p1["strehls"], label="norm")
 plt.legend()
 #%%
 
@@ -583,37 +950,84 @@ import pickle
 total_data = {"dmpsf_model": dmpsf.model,
               "modpsf_model": modpsf.model, 
               "haso_ref": REF_WF,
-              "data_ff_100_05g_d0_1m2":data_ff_100_05g_d0_1m2,
-              "data_ff_50_05g_d0_1m2":data_ff_50_05g_d0_1m2,
-              "data_ff_25_05g_d0_1m2":data_ff_25_05g_d0_1m2,
-              "data_ff_10_05g_d0_1m2":data_ff_10_05g_d0_1m2,
-              "data_ff_5_05g_d0_1m2":data_ff_5_05g_d0_1m2,
-              "data_norm_100_03g_d0_1m2":data_norm_100_03g_d0_1m2,
-              "data_norm_100_05g_d0_1m2":data_norm_100_05g_d0_1m2,
-              "data_norm_50_03g_d0_1m2":data_norm_50_03g_d0_1m2,
-              "data_norm_25_03g_d0_1m2":data_norm_25_03g_d0_1m2,
-              "data_norm_10_03g_d0_1m2": data_norm_10_03g_d0_1m2,
-              "data_norm_5_03g_d0_1m2": data_norm_5_03g_d0_1m2,
-              "data_ff_5_05g_d0_1m2_offset": data_ff_5_05g_d0_1m2_offset,
-              "data_norm_5_03g_d0_1m2_offset":data_norm_5_03g_d0_1m2_offset,
+             "data_ff_5_03g_d0_1m2_p1 ":data_ff_5_03g_d0_1m2_p1,
+            "data_norm_5_03g_d0_1m2_p1 ": data_norm_5_03g_d0_1m2_p1,
+            "data_ff_5_03g_d0_1m2_p2 ":data_ff_5_03g_d0_1m2_p2,
+            "data_norm_5_03g_d0_1m2_p2 ":data_norm_5_03g_d0_1m2_p2,
+            "data_ff_5_03g_d0_1m2_p3 ":data_ff_5_03g_d0_1m2_p3,
+            "data_norm_5_03g_d0_1m2_p3 ":data_norm_5_03g_d0_1m2_p3,
+            "data_ff_5_03g_d0_1m2_p4 ":data_ff_5_03g_d0_1m2_p4,
+            "data_norm_5_03g_d0_1m2_p4 ":data_norm_5_03g_d0_1m2_p4,
+            "data_ff_5_01g_d0_1m2_p1 ":data_ff_5_01g_d0_1m2_p1,
+            "data_norm_5_01g_d0_1m2_p1 ":data_norm_5_01g_d0_1m2_p1,
+            "data_ff_5_01g_d0_1m2_p2 ":data_ff_5_01g_d0_1m2_p2,
+            "data_norm_5_01g_d0_1m2_p2 ":data_norm_5_01g_d0_1m2_p2,
+            "data_ff_5_01g_d0_1m2_p3 ":data_ff_5_01g_d0_1m2_p3,
+            "data_norm_5_01g_d0_1m2_p3 ":data_norm_5_01g_d0_1m2_p3,
+            "data_ff_5_01g_d0_1m2_p4 ":data_ff_5_01g_d0_1m2_p4,
+            "data_norm_5_01g_d0_1m2_p4 ":data_norm_5_01g_d0_1m2_p4,
+            "data_ff_50_03g_d0_1m2_p1 ":data_ff_50_03g_d0_1m2_p1,
+            "data_norm_50_03g_d0_1m2_p1 ":data_norm_50_03g_d0_1m2_p1,
+            "data_ff_50_03g_d0_1m2_p2 ":data_ff_50_03g_d0_1m2_p2,
+            "data_norm_50_03g_d0_1m2_p2 ":data_norm_50_03g_d0_1m2_p2,
+            "data_ff_50_03g_d0_1m2_p3 ":data_ff_50_03g_d0_1m2_p3,
+            "data_norm_50_03g_d0_1m2_p3 ":data_norm_50_03g_d0_1m2_p3,
+            "data_ff_50_03g_d0_1m2_p4 ":data_ff_50_03g_d0_1m2_p4,
+            "data_norm_50_03g_d0_1m2_p4 ":data_norm_50_03g_d0_1m2_p4,
 
+              
 }
-with open("29aug2025_data_norm_vs_ff_switch40_1m2_0delay_turbwheel_mult_photons.pickle", 'wb') as handle:
+with open("15sept2025_data_switch40_50KL_multi_wheel.pickle", 'wb') as handle:
     pickle.dump(total_data, handle)
 
+#%%
+total_data = {"dmpsf_model": dmpsf.model,
+              "modpsf_model": modpsf.model, 
+              "haso_ref": REF_WF,
+              "data_ff_5_05g_d0_8m0_p1":data_ff_5_05g_d0_8m0_p1,
+              "data_ff_5_05g_d0_8m0_p2":data_ff_5_05g_d0_8m0_p2,
+              "data_ff_5_05g_d0_8m0_p3":data_ff_5_05g_d0_8m0_p3,
+              "data_ff_5_03g_d0_8m0_p1":data_ff_5_03g_d0_8m0_p1,
+              "data_ff_5_03g_d0_8m0_p2":data_ff_5_03g_d0_8m0_p2,
+              "data_ff_5_03g_d0_8m0_p3":data_ff_5_03g_d0_8m0_p3,
+              "data_norm_5_03g_d0_8m0_p1":data_norm_5_03g_d0_8m0_p1,
+              "data_norm_5_03g_d0_8m0_p2":data_norm_5_03g_d0_8m0_p2,
+              "data_norm_5_03g_d0_8m0_p3":data_norm_5_03g_d0_8m0_p3,
+              "data_tr_5_03g_d0_8m0_p1":data_tr_5_03g_d0_8m0_p1,
+              "data_tr_5_03g_d0_8m0_p2":data_tr_5_03g_d0_8m0_p2,
+              "data_tr_5_03g_d0_8m0_p3": data_tr_5_03g_d0_8m0_p3,
+
+
+}
+with open("03sept2025_data_5_switch40_8m0_0delay_turbwheel_multi_spots.pickle", 'wb') as handle:
+    pickle.dump(total_data, handle)
+
+
+#%%
+total_data = {"dmpsf_model": dmpsf.model,
+              "modpsf_model": modpsf.model, 
+              "haso_ref": REF_WF,
+              "rms_turb_p1":rms_turb_p1,
+              "rms_turb_p2":rms_turb_p2,
+              "rms_turb_p3":rms_turb_p3,
+ 
+}
+with open("04sept2025_turbulences.pickle", 'wb') as handle:
+    pickle.dump(total_data, handle)
 #%%
 
 fig, (ax1,ax2) = plt.subplots(2,1)
 
-ax1.plot(data_norm_5_03g_1m2["rms_plot"]*1000, label="HASO RMS")
+ax1.plot(data_ff_50_03g_d0_1m2_p2 ["rms_plot"]*1000, label="HASO RMS ff")
+ax1.plot(data_norm_50_03g_d0_1m2_p2  ["rms_plot"]*1000, label="HASO RMS n")
 ax1.set_title("WFE RMS (nm)")
 
-ax2.plot(data_norm_5_03g_1m2["strehls"], label="From DM PSF cam")
-ax2.plot(data_norm_5_03g_1m2["rms_strehl"], "--", label="From HASO RMS")
-ax2.plot(data_norm_5_03g_1m2["strehls_mod"], "-*", label="From MOD PSF cam")
+ax2.plot(data_ff_50_03g_d0_1m2_p2["strehls"], label="From DM PSF cam ff")
+ax2.plot(data_norm_50_03g_d0_1m2_p2["strehls"], "--", label="From HASO RMS n")
+
 ax2.set_title("Strehl")
 plt.legend()
-fig.suptitle(f'Closed-loop performance,{data_norm_5_03g_1m2["gain"]}g', fontsize=16)
+fig.suptitle(f'Closed-loop performance,{data_ff_50_03g_d0_1m2_p2["gain"]}g', fontsize=16)
 
 #%%
 c('PA 0')
@@ -1324,13 +1738,13 @@ for i in range(len(amps)):
     print(f"{i}/{len(amps)}")
     fsm.stop()
     wfc.push(selected_KL, amps[i])
-    time.sleep(0.5)
+    time.sleep(1.0)
     slopes_TR = loop.getTRSlopes()
 
     if loop.FF_active:
         if loop.ref_signal_normed is not None:
             newCorrection = updateCorrectionTRFF(correction=np.zeros((loop.numModes)), 
-                                            gCM=loop.gCM, 
+                                            gCM=loop.CM, 
                                             slopes_TR=slopes_TR.flatten(),
                                             ref_signal_normed = loop.ref_signal_normed)
         else:
@@ -1338,7 +1752,7 @@ for i in range(len(amps)):
     else:
         if loop.ref_signal_per_mode_normed is not None:
             newCorrection = updateCorrectionTR(correction=np.zeros((loop.numModes)), 
-                                            gCM=loop.gCM, 
+                                            gCM=loop.CM, 
                                             slopes_TR=slopes_TR,
                                             weights=loop.frame_weights,
                                             ref_signal_per_mode_normed = loop.ref_signal_per_mode_normed)
@@ -1359,6 +1773,9 @@ plt.figure()
 plt.plot(amps, amps+amp_resp)
 plt.plot(amps, [0]*len(amps), "--")
 plt.show
+
+
+
 # %%
 ################### Stop all ###################
 fsm.stop()

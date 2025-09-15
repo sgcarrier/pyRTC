@@ -18,6 +18,28 @@ def updateCorrectionTR(correction=np.array([], dtype=np.float64),
     return correction - new_corr
 
 
+
+@jit(nopython=True)
+def updateCorrectionTR_no_zero(correction=np.array([], dtype=np.float64), 
+                       gCM=np.array([[]], dtype=np.float64),  
+                       slopes_TR=np.array([[]], dtype=np.float64),
+                       weights=np.array([[]], dtype=np.float64),
+                       ref_signal_per_mode_normed=np.array([[]], dtype=np.float64),):
+    signal_per_mode = slopes_TR @ weights 
+    signal_per_mode_normed = signal_per_mode / np.sum(signal_per_mode, axis=0)
+    #TODO Might be able to optimize this with einsum
+    #new_corr = np.diag(gCM.astype(np.float64) @ (signal_per_mode_normed - ref_signal_per_mode_normed))
+    nModes = weights.shape[1]
+    signal_masks = signal_per_mode_normed > 0
+    new_corr = np.zeros(nModes)
+    for i in range(nModes):
+        tmp = np.zeros(signal_per_mode_normed.shape[0])
+        mask_for_mode = signal_masks[:,i]
+        tmp[mask_for_mode] = (signal_per_mode_normed[:,i])[mask_for_mode] - (ref_signal_per_mode_normed[:,i])[mask_for_mode]
+        new_corr[i] = np.dot(gCM.astype(np.float64)[i,:], tmp)
+    return correction - new_corr
+
+
 @jit(nopython=True)
 def calc_TR_Residual(CM=np.array([[]], dtype=np.float64),  
                        slopes_TR=np.array([[]], dtype=np.float64),
@@ -43,7 +65,58 @@ def updateCorrectionTRFF(correction=np.array([], dtype=np.float64),
     new_corr = gCM.astype(np.float64) @ (signal_normed - ref_signal_normed)
     return correction - new_corr
 
+@jit(nopython=True)
+def updateCorrectionTRFF_empty_frame_zero(correction=np.array([], dtype=np.float64), 
+                       gCM=np.array([[]], dtype=np.float64),  
+                       slopes_TR=np.array([[]], dtype=np.float64),
+                       ref_signal_normed=np.array([[]], dtype=np.float64),):
+    signal_normed = np.zeros(slopes_TR.shape)
+    for i in range(slopes_TR.shape[1]):
+        if np.sum(slopes_TR[:,i]) != 0:
+            signal_normed[:,i] = slopes_TR[:,i] / (np.sum(slopes_TR[:,i])*slopes_TR.shape[1])
+        else:
+            signal_normed[:,i] = 0
+    #TODO Might be able to optimize this with einsum
+    new_corr = gCM.astype(np.float64) @ (signal_normed.flatten() - ref_signal_normed.flatten() )
+    return correction - new_corr
 
+@jit(nopython=True)
+def updateCorrectionTRFF_no_zero_per_frame(correction=np.array([], dtype=np.float64), 
+                       gCM=np.array([[]], dtype=np.float64),  
+                       slopes_TR=np.array([[]], dtype=np.float64),
+                       ref_signal_normed=np.array([[]], dtype=np.float64),):
+    signal_normed = np.zeros(slopes_TR.shape)
+    for i in range(slopes_TR.shape[1]):
+        if np.sum(slopes_TR[:,i]) != 0:
+            signal_normed[:,i] = slopes_TR[:,i] / (np.sum(slopes_TR[:,i])*slopes_TR.shape[1])
+        else:
+            signal_normed[:,i] = ref_signal_normed[:,i]
+    #TODO Might be able to optimize this with einsum
+    new_corr = gCM.astype(np.float64) @ (signal_normed.flatten() - ref_signal_normed.flatten() )
+    return correction - new_corr
+
+
+
+@jit(nopython=True)
+def updateCorrectionTRFF_no_zero(correction=np.array([], dtype=np.float64), 
+                       gCM=np.array([[]], dtype=np.float64),  
+                       slopes_TR=np.array([[]], dtype=np.float64),
+                       ref_signal_normed=np.array([[]], dtype=np.float64),):
+    signal_normed = np.zeros(slopes_TR.shape)
+    for i in range(slopes_TR.shape[1]):
+        if np.sum(slopes_TR[:,i]) != 0:
+            signal_normed[:,i] = slopes_TR[:,i] / (np.sum(slopes_TR[:,i])*slopes_TR.shape[1])
+        else:
+            signal_normed[:,i] = 0
+    signal_flat = signal_normed.flatten()
+    non_zero_signal_mask = signal_flat > 0
+    final_signal = np.zeros(signal_flat.shape)
+    for i in range(non_zero_signal_mask.shape[0]):
+        if non_zero_signal_mask[i]:
+            final_signal[i] = signal_flat[i] - ref_signal_normed.flatten()[i]
+    #TODO Might be able to optimize this with einsum
+    new_corr = gCM.astype(np.float64) @ (final_signal)
+    return correction - new_corr
 
 @jit(nopython=True)
 def calc_TRFF_residual(CM=np.array([[]], dtype=np.float64),  
@@ -411,9 +484,9 @@ class TimeResolvedLoop(Loop):
 
         if self.FF_active:
             if self.ref_signal_normed is not None:
-                newCorrection = updateCorrectionTRFF(correction=self.currentCorrection, 
+                newCorrection = updateCorrectionTRFF_no_zero(correction=self.currentCorrection, 
                                                 gCM=self.gCM, 
-                                                slopes_TR=self.latest_slopes.flatten(),
+                                                slopes_TR=self.latest_slopes,
                                                 ref_signal_normed = self.ref_signal_normed)
             else:
                 print("Error: ref signal never defined, skipping loop")
@@ -430,7 +503,7 @@ class TimeResolvedLoop(Loop):
                 return
         else:
             if self.ref_signal_per_mode_normed is not None:
-                newCorrection = updateCorrectionTR(correction=self.currentCorrection, 
+                newCorrection = updateCorrectionTR_no_zero(correction=self.currentCorrection, 
                                                 gCM=self.gCM, 
                                                 slopes_TR=self.latest_slopes,
                                                 weights=self.frame_weights,
@@ -529,20 +602,31 @@ class TimeResolvedLoop(Loop):
         self.FF_weighted_active= False
 
         self.CM = np.zeros((self.numModes, self.signalSize*self.numFrames),dtype=self.signalDType)
-
         self.IM       = np.zeros((self.signalSize*self.numFrames, self.numModes),dtype=self.signalDType)
-        push_flat = self.push_cube.reshape(-1, self.push_cube.shape[-1])
-        pull_flat = self.pull_cube.reshape(-1, self.pull_cube.shape[-1])
-        ref_flat  = self.ref_slopes.flatten()
+        #push_flat = self.push_cube.reshape(-1, self.push_cube.shape[-1])
+        #pull_flat = self.pull_cube.reshape(-1, self.pull_cube.shape[-1])
+        push_flat = self.push_cube
+        pull_flat = self.pull_cube
+        ref_flat  = self.ref_slopes
+        
         for mode in range(self.numModes):
-            push_signal      = ((push_flat[:,mode]/np.sum(push_flat[:,mode])) - (ref_flat/np.sum(ref_flat)))
-            pull_signal      = ((pull_flat[:,mode]/np.sum(pull_flat[:,mode])) - (ref_flat/np.sum(ref_flat)))
-            if isinstance(self.pokeAmp, float):
-                self.IM[:,mode]  = (push_signal - pull_signal) / (2*(self.pokeAmp/np.sqrt(self.findModeOrder(mode))))
-            else:
-                self.IM[:,mode]  = (push_signal - pull_signal) / (2*self.pokeAmp[mode])
+            IM_tmp       = np.zeros((self.signalSize, self.numFrames),dtype=self.signalDType)
+            for f in range(self.numFrames):
+                push_signal      = push_flat[:,f,mode]/(np.sum(push_flat[:,f,mode])* self.numFrames)
+                pull_signal      = pull_flat[:,f, mode]/(np.sum(pull_flat[:,f,mode])* self.numFrames)
 
-        self.ref_signal_normed = (ref_flat/np.sum(ref_flat))
+                if isinstance(self.pokeAmp, float):
+                    IM_tmp[:,f]  = (push_signal - pull_signal) / (2*(self.pokeAmp/np.sqrt(self.findModeOrder(mode))))
+                else:
+                    IM_tmp[:,f]  = (push_signal - pull_signal) / (2*self.pokeAmp[mode])
+            self.IM[:, mode] = IM_tmp.flatten()
+
+        ref_signal_normed_tmp = np.zeros((self.signalSize, self.numFrames))
+        for f in range(self.numFrames):
+            ref_signal_normed_tmp[:,f] = (ref_flat[:,f]/(np.sum(ref_flat[:,f])* self.numFrames))
+                
+
+        self.ref_signal_normed = ref_signal_normed_tmp
 
         self.computeCM()
 

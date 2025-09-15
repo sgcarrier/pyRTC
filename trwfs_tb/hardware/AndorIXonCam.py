@@ -85,10 +85,9 @@ class AndorIXon(WavefrontSensor):
         
         data_no_dark = self.data.astype(self.imageDType) - self.dark 
 
-        data_no_dark[data_no_dark<0] = 0
-
 
         if self.total_photon_flux > 0:
+            data_no_dark[data_no_dark<0] = 0
             #data_no_dark = self.sample_image_events(data_no_dark, self.total_photon_flux)
             if np.sum(data_no_dark) != 0:
                 data_no_dark = (((data_no_dark) / np.sum(data_no_dark) * self.total_photon_flux))
