@@ -19,6 +19,20 @@ loop:
   - standardIntegrator
 
 
+trwfs:
+  name: MPD_SPAD
+  idx: 0
+  binning: 1
+  exposure: 100 # in 10ns
+  nFrames: 100
+  width: 32  
+  height: 64 
+  darkCount: 1000
+  #darkFile: "res/spad_dark.npy"
+  affinity: 3
+  functions:
+  - expose
+
 wfs:
   name: ANDOR_IXON
   idx: 0

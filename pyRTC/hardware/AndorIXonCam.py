@@ -2,10 +2,13 @@ from pyRTC.WavefrontSensor import WavefrontSensor
 from pyRTC.Pipeline import *
 from pyRTC.utils import *
 from pylablib.devices import Andor
+import pylablib
 import argparse
 import sys
 import os 
 
+
+pylablib.par['devices/dlls/andor_sdk2'] = "C:\Program Files\Andor Driver Pack 2"
 class AndorIXon(WavefrontSensor):
 
     def __init__(self, conf) -> None:
@@ -39,11 +42,13 @@ class AndorIXon(WavefrontSensor):
     def close_shutter(self):
         self.cam.setup_shutter("closed")
 
+    def open_camera(self):
+        self.cam.open()
+
     def close_camera(self):
         self.close_shutter()
         self.cam.close()
         
-
 
     def setExposure(self, exposure):
         super().setExposure(exposure)
