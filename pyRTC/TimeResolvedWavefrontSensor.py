@@ -34,31 +34,7 @@ class TimeResolvedWavefrontSensor(pyRTCComponent):
         super().__init__(conf)
 
         return
-    
-    def setRoi(self, roi):
 
-        self.roiWidth = roi[0]
-        self.roiHeight = roi[1]
-        self.roiLeft = roi[2]
-        self.roiTop = roi[3]
-        return
-
-    def setExposure(self, exposure):
-        self.exposure = exposure
-        return
-    
-    def setBinning(self, binning):
-        self.binning = binning
-        return
-    
-    def setGain(self, gain):
-        self.gain = gain
-        return
-    
-    def setBitDepth(self, bitDepth):
-        self.bitDepth = bitDepth
-        return
-    
     def expose(self):
         self.cubeRaw.write(self.data)
         self.cube.write(self.data.astype(self.cubeDType) - self.dark[np.newaxis, :,:])

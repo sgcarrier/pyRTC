@@ -15,33 +15,67 @@ class MPDSPADCam(TimeResolvedWavefrontSensor):
         
 
         # Default settings for Hermes cam
-        self.exposure = setFromConfig(conf, "exposure", 100)
-        self.nFrames = setFromConfig(conf, "nFrames", 100)
-        self.nIntegFrames = setFromConfig(conf, "nIntegFrames", 300)
-        self.nCounters = setFromConfig(conf, "nCounters", 1)
+        self.setExposure(setFromConfig(conf, "exposure", 100))
+        self.setNFrames(setFromConfig(conf, "nFrames", 100))
+        self.setNIntegFrames(setFromConfig(conf, "nIntegFrames", 300))
+        self.setNCounters(setFromConfig(conf, "nCounters", 1))
 
-        self.cam = Hermes(Hermes.CameraMode.NORMAL) # TODO add option to become trigger mode
-
-        self.cam.SetCameraPar(Exposure = self.exposure,  # in 10ns
-                              NFrames = self.nFrames, 
-                              NIntegFrames = self.nIntegFrames , 
-                              NCounters = self.nCounters , 
-                              Force8bit = Hermes.State.DISABLED, 
-                              Half_array = Hermes.State.DISABLED, 
-                              Signed_data = Hermes.State.DISABLED)
+        self.cam = Hermes(Hermes.CameraMode.NORMAL) # Start in normal
+        self.cam.SetCameraPar(Exposure = self.exposure,  # if in normal mode, this is ignored and forced to 10.40 us, else is in 10ns increments
+                                NFrames = self.nFrames, 
+                                NIntegFrames = self.nIntegFrames , 
+                                NCounters = self.nCounters , 
+                                Force8bit = Hermes.State.DISABLED, 
+                                Half_array = Hermes.State.DISABLED, 
+                                Signed_data = Hermes.State.DISABLED)
         self.cam.ApplySettings()
         
         super().__init__(conf)
         return 
-
-
 
     def __del__(self):
         super().__del__()
         time.sleep(1e-1)
         del self.cam  # Hermes SDK managed the deallocation of memory
         return
-    
+
+    def applySettingsToCamera(self):
+        if self.running:
+            print("Stop device first")
+        else:
+            self.cam.SetCameraPar(Exposure = self.exposure,  # if in normal mode, this is ignored and forced to 10.40 us, else is in 10ns increments
+                                NFrames = self.nFrames, 
+                                NIntegFrames = self.nIntegFrames , 
+                                NCounters = self.nCounters , 
+                                Force8bit = Hermes.State.DISABLED, 
+                                Half_array = Hermes.State.DISABLED, 
+                                Signed_data = Hermes.State.DISABLED)
+            self.cam.ApplySettings()
+
+    def setNCounters(self, value):
+        if 1 <= value <= 3:
+            self.nCounters = value
+        else:
+            raise ValueError("Invalid value for nCounters")  
+
+    def setNIntegFrames(self, value):
+        if 1 <= value <= 65534:
+            self.nIntegFrames = value
+        else:
+            raise ValueError("Invalid value for nIntegFrames")
+
+    def setNFrames(self, value):
+        if 1 <= value <= 65534:
+            self.nFrames = value
+        else:
+            raise ValueError("Invalid value for nFrames")
+
+    def setExposure(self, value):
+        if 1 <= value <= 65534:
+            self.exposure = value
+        else:
+            raise ValueError("Invalid value for exposure")
+
     def enable_sync_mode(self):
         if (int(self.nFrames) > 100) or (int(self.nFrames) < 0):
             print("Change the nFrames parameter first, limit is 100 frames for sync mode")
@@ -49,6 +83,17 @@ class MPDSPADCam(TimeResolvedWavefrontSensor):
 
     def disable_sync_mode(self):
         self.cam.SetSyncInState(Hermes.State.DISABLED, 0)
+
+
+    def advancedMode(self, adv):
+        if self.running:
+            print("Stop device before switching modes")
+        else:
+            if adv:
+                self.cam.SetAdvancedMode(Hermes.State.ENABLED)
+            else:
+                self.cam.SetAdvancedMode(Hermes.State.DISABLED)
+            
 
 
     def expose(self):

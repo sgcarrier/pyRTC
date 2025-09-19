@@ -248,12 +248,18 @@ class hardwareLauncher:
     
     def read(self):
         try:
-            reply = self.processSocket.recv(4096).decode()
+            reply = self.processSocket.recv(4096*2).decode()
             return json.loads(reply)
         except socket.timeout:
             return -1
         
     
+def numpy_serializer(obj):
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    if isinstance(obj, (np.integer, np.floating, np.bool_)):
+        return obj.item()
+    raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
 
 class Listener:
 
@@ -289,7 +295,10 @@ class Listener:
 
         #Read request from the RTC
         request = self.read()
-        if "type" not in request:
+        if request is None:
+            return 
+        print(request)
+        if "type" not in request.keys():
             self.write(self.BadMessage)
 
         #Sort behaviour by request type
@@ -338,13 +347,16 @@ class Listener:
             self.write(self.BadMessage)
 
     def write(self, message):
-        message = json.dumps(message)
+        message = json.dumps(message, default=numpy_serializer)
         self.RTCsocket.send(message.encode())
         return
     
     def read(self):
         reply = self.RTCsocket.recv(4096).decode()
-        return json.loads(reply)
+        if reply is None:
+            return None
+        else:
+            return json.loads(reply)
     
 def initExistingShm(shmName):
     #Read wfc metadata and open a stream to the shared memory
