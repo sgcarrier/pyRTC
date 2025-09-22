@@ -226,7 +226,7 @@ class TimeResolvedLoop(Loop):
             #Average out N new WFS frames
             ref_slopes[:,s] =  np.zeros((self.signalSize))
             for n in range(self.numItersIM):
-                ref_slopes[:,s] += self.wfsShm.read()
+                ref_slopes[:,s] += self.signalShm.read()
             ref_slopes[:,s] /= self.numItersIM
 
         #For each mode
@@ -240,7 +240,7 @@ class TimeResolvedLoop(Loop):
             #Add some delay to ensure one-to-one
             time.sleep(self.hardwareDelay)
             #Burn the first new image since we were moving the DM during the exposure
-            self.wfsShm.read()
+            self.signalShm.read()
 
             self.fsm.currentPos = None
             tmp_plus =  np.zeros((self.signalSize, self.numFrames))
@@ -248,7 +248,7 @@ class TimeResolvedLoop(Loop):
                 self.fsm.step()
                 #Average out N new WFS frames
                 for n in range(self.numItersIM):
-                    tmp_plus[:,s] += self.wfsShm.read()
+                    tmp_plus[:,s] += self.signalShm.read()
                 tmp_plus[:,s] /= self.numItersIM
 
 
@@ -261,7 +261,7 @@ class TimeResolvedLoop(Loop):
             #Add some delay to ensure one-to-one
             time.sleep(self.hardwareDelay)
             #Burn the first new image since we were moving the DM during the exposure
-            self.wfsShm.read()
+            self.signalShm.read()
 
             self.fsm.currentPos = None
             tmp_minus =  np.zeros((self.signalSize, self.numFrames))
@@ -269,7 +269,7 @@ class TimeResolvedLoop(Loop):
                 self.fsm.step()
                 #Average out N new WFS frames
                 for n in range(self.numItersIM):
-                    tmp_minus[:,s] += self.wfsShm.read()
+                    tmp_minus[:,s] += self.signalShm.read()
                 tmp_minus[:,s] /= self.numItersIM
 
                 tmp_minus[:,s] = tmp_minus[:,s] - ref_slopes[:,s]
@@ -298,7 +298,7 @@ class TimeResolvedLoop(Loop):
             #Average out N new WFS frames
             self.ref_slopes[:,s] =  np.zeros((self.signalSize))
             for n in range(self.numItersIM):
-                self.ref_slopes[:,s] += self.wfsShm.read()
+                self.ref_slopes[:,s] += self.signalShm.read()
             self.ref_slopes[:,s] /= self.numItersIM
 
         #For each mode
@@ -315,7 +315,7 @@ class TimeResolvedLoop(Loop):
             #Add some delay to ensure one-to-one
             time.sleep(self.hardwareDelay)
             #Burn the first new image since we were moving the DM during the exposure
-            self.wfsShm.read()
+            self.signalShm.read()
 
             self.fsm.currentPos = None
             self.tmp_plus =  np.zeros((self.signalSize, self.numFrames))
@@ -323,7 +323,7 @@ class TimeResolvedLoop(Loop):
                 self.fsm.step()
                 #Average out N new WFS frames
                 for n in range(self.numItersIM):
-                    self.tmp_plus[:,s] += self.wfsShm.read()
+                    self.tmp_plus[:,s] += self.signalShm.read()
                 self.tmp_plus[:,s] /= self.numItersIM
 
 
@@ -336,7 +336,7 @@ class TimeResolvedLoop(Loop):
             #Add some delay to ensure one-to-one
             time.sleep(self.hardwareDelay)
             #Burn the first new image since we were moving the DM during the exposure
-            self.wfsShm.read()
+            self.signalShm.read()
 
             self.fsm.currentPos = None
             self.tmp_minus =  np.zeros((self.signalSize, self.numFrames))
@@ -344,7 +344,7 @@ class TimeResolvedLoop(Loop):
                 self.fsm.step()
                 #Average out N new WFS frames
                 for n in range(self.numItersIM):
-                    self.tmp_minus[:,s] += self.wfsShm.read()
+                    self.tmp_minus[:,s] += self.signalShm.read()
                 self.tmp_minus[:,s] /= self.numItersIM
 
                 #self.tmp_minus[:,s] = self.tmp_minus[:,s] - self.ref_slopes[:,s]
@@ -367,7 +367,7 @@ class TimeResolvedLoop(Loop):
         signal_TR =  np.zeros((self.signalSize, 48))
         for s in range(self.numFrames):
             self.fsm.step()
-            signal_TR[:,s] = self.wfsShm.read() - self.signal_TR_ref[:,s]
+            signal_TR[:,s] = self.signalShm.read() - self.signal_TR_ref[:,s]
         return signal_TR
 
 
@@ -380,7 +380,7 @@ class TimeResolvedLoop(Loop):
         for s in range(self.numFrames):
             self.fsm.step()
             for i in range(10):
-                self.signal_TR_ref[:,s] += self.wfsShm.read()
+                self.signal_TR_ref[:,s] += self.signalShm.read()
             self.signal_TR_ref[:,s] /= 10
 
 
