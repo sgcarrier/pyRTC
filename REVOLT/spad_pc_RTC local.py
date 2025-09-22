@@ -22,7 +22,7 @@ wfs.setExposure(0.0625)
 
 # TODO test turning on the Andor cooler
 wfs.cam.set_cooler(on=True)
-wfs.cam.get_temperature_setpoint()
+wfs.cam.get_temperature_setpoint(20)
 wfs.cam.get_temperature()
 #wfs.cam.set_temperature(20)
 

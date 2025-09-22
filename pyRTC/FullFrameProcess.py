@@ -48,7 +48,7 @@ class FullFrameProcess(SlopesProcess):
         ff_signal = np.zeros((self.signalSize))
         for i in range(iters):
             image = self.readImage().astype(self.signalDType)
-            if self.signalType == "slopes":
+            if self.signalType == "slopes": #TODO change this for full_frame
                 if self.wfsType == "PYWFS":
                     p1,p2,p3,p4 = image[self.p1mask], image[self.p2mask], image[self.p3mask], image[self.p4mask]
                     ff_signal += computeFullFramePYWFS(p1=p1,
@@ -56,7 +56,6 @@ class FullFrameProcess(SlopesProcess):
                                                         p3=p3,
                                                         p4=p4,
                                                         flatNorm=self.flatNorm)
-                    
         ff_signal /= iters
         self.refSignal = ff_signal
                 

@@ -1,0 +1,255 @@
+"""
+Loop Superclass
+"""
+
+import os 
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1" 
+os.environ["MKL_NUM_THREADS"] = "1" 
+os.environ["VECLIB_MAXIMUM_THREADS"] = "1" 
+os.environ["NUMEXPR_NUM_THREADS"] = "1" 
+os.environ['NUMBA_NUM_THREADS'] = '1'
+
+from pyRTC.Pipeline import *
+from pyRTC.utils import *
+from pyRTC.pyRTCComponent import *
+import threading
+import argparse
+
+import numpy as np
+import matplotlib.pyplot as plt
+import time
+from numba import jit
+from sys import platform
+
+
+
+@jit(nopython=True)
+def updateCorrection(correction=np.array([], dtype=np.float32), 
+                     gCM=np.array([[]], dtype=np.float32),  
+                     slopes=np.array([], dtype=np.float32)):
+    return correction - np.dot(gCM,slopes)
+
+# @jit(nopython=True)
+# def updateCorrectionPerturb(correction=np.array([], dtype=np.float32),
+#                             pertub=np.array([], dtype=np.float32),  
+#                      gCM=np.array([[]], dtype=np.float32),  
+#                      slopes=np.array([], dtype=np.float32)):
+#     return correction - np.dot(gCM,slopes) + pertub
+
+class Loop(pyRTCComponent):
+
+    def __init__(self, conf, remoteWFC) -> None:
+
+        self.confWFS = conf["wfs"]
+        self.confWFC = conf["wfc"]
+        self.confLoop = conf["loop"]
+        self.name = "Loop"
+        
+        #Read wfs signal's metadata and open a stream to the shared memory
+        self.signalMeta = ImageSHM("signal_meta", (ImageSHM.METADATA_SIZE,), np.float64).read_noblock_safe()
+        self.signalDType = float_to_dtype(self.signalMeta[3])
+        self.signalSize = int(self.signalMeta[2]//self.signalDType.itemsize)
+        self.signalShm = ImageSHM("signal", (self.signalSize,), self.signalDType)
+        self.nullSignal = np.zeros(self.signalSize, dtype=self.signalDType)
+
+        #Read wfs SLOPES metadata and open a stream to the shared memory
+        self.signal2DMeta = ImageSHM("signal2D_meta", (ImageSHM.METADATA_SIZE,), np.float64).read_noblock_safe()
+        self.signal2DDType = float_to_dtype(self.signal2DMeta[3])
+        self.signal2DSize = int(self.signal2DMeta[2]//self.signal2DDType.itemsize)
+        self.signal2D_width, self.signal2D_height = int(self.signal2DMeta[4]),  int(self.signal2DMeta[5])
+        print(self.signal2DMeta[3], (self.signal2D_width, self.signal2D_height), self.signal2DDType)
+        self.signal2DShm = ImageSHM("signal2D", (self.signal2D_width, self.signal2D_height), self.signal2DDType)
+
+        self.remoteWFC = remoteWFC
+        #Read wfc metadata and open a stream to the shared memory
+        #self.wfcMeta = ImageSHM("wfc_meta", (ImageSHM.METADATA_SIZE,), np.float64).read_noblock_safe()
+        #self.wfcDType = float_to_dtype(self.wfcMeta[3])
+        #self.numModes = int(self.wfcMeta[2]//self.wfcDType.itemsize)
+        #self.wfcShm = ImageSHM("wfc", (self.numModes,), self.wfcDType)
+
+        #Read the wfc2D metadata and open a stream to the shared memory
+        #self.wfc2DMeta = ImageSHM("wfc2D_meta", (ImageSHM.METADATA_SIZE,), np.float64).read_noblock_safe()
+        #self.wfc2DDType = float_to_dtype(self.wfc2DMeta[3])
+        #self.wfc2DSize = int(self.wfc2DMeta[2]//self.wfc2DDType.itemsize)
+        #self.wfc2D_width, self.wfc2D_height = int(self.wfc2DMeta[4]),  int(self.wfc2DMeta[5])
+        #self.wfc2DShm = ImageSHM("wfc2D", (self.wfc2D_width, self.wfc2D_height), self.wfc2DDType)
+
+        self.numDroppedModes = setFromConfig(self.confLoop, "numDroppedModes", 0)
+        self.numActiveModes = self.numModes - self.numDroppedModes
+        self.flat = np.zeros(self.numModes, dtype=np.float32)
+
+        self.IM = np.zeros((self.signalSize, self.numModes),dtype=self.signalDType)
+        self.CM = np.zeros((self.numModes, self.signalSize),dtype=self.signalDType)
+        self.gain = setFromConfig(self.confLoop, "gain", 0.1)
+        self.leakyGain = setFromConfig(self.confLoop, "leakyGain", 0)
+        self.perturbAmp = 0
+        self.hardwareDelay = setFromConfig(self.confWFC, "hardwareDelay", 0)
+        self.pokeAmp = setFromConfig(self.confLoop, "pokeAmp", 1e-2)
+        self.numItersIM = setFromConfig(self.confLoop, "numItersIM", 100) 
+        self.delay = setFromConfig(self.confLoop, "delay", 0)
+        self.IMMethod = setFromConfig(self.confLoop, "IMMethod", "push-pull") 
+        self.IMFile = setFromConfig(self.confLoop, "IMFile", "")
+        
+        self.loadIM()
+
+        super().__init__(self.confLoop)        
+        return
+
+    def setGain(self, gain):
+        self.gain = gain
+        self.gCM = self.gain*self.CM
+        return
+
+    def setPeturbAmp(self, amp):
+        self.perturbAmp = amp
+        return
+
+    def pushPullIM(self):
+
+        self.flatten()
+        #For each mode
+        for i in range(self.numModes):
+            #Reset the correction
+            correction = self.flat.copy()
+            #Plus amplitude
+            correction[i] = self.pokeAmp
+            #Post a new shape to be made
+            self.remoteWFC.run("write", correction)
+            #Add some delay to ensure one-to-one
+            time.sleep(self.hardwareDelay)
+            #Burn the first new image since we were moving the DM during the exposure
+            self.signalShm.read()
+            #Average out N new WFS frames
+            tmp_plus = np.zeros_like(self.IM[:,i])
+            for n in range(self.numItersIM):
+                tmp_plus += self.signalShm.read()
+            tmp_plus /= self.numItersIM
+
+            #Minus amplitude
+            correction[i] = -self.pokeAmp
+            #Post a new shape to be made
+            self.remoteWFC.run("write", correction)
+            #Add some delay to ensure one-to-one
+            time.sleep(self.hardwareDelay)
+            #Burn the first new image since we were moving the DM during the exposure
+            self.signalShm.read()
+            #Average out N new WFS frames
+            tmp_minus = np.zeros_like(self.IM[:,i])
+            for n in range(self.numItersIM):
+                tmp_minus += self.signalShm.read()
+            tmp_minus /= self.numItersIM
+
+            #Compute the normalized difference
+            self.IM[:,i] = (tmp_plus-tmp_minus)/(2*self.pokeAmp)
+
+        return
+    
+    def computeIM(self):
+
+        self.pushPullIM()
+
+        self.computeCM()
+        return
+    
+    def saveIM(self,filename=''):
+        if filename == '':
+            filename = self.IMFile
+        np.save(filename, self.IM)
+
+    def loadIM(self,filename=''):
+        if filename == '':
+            filename = self.IMFile
+        if filename == '':
+            self.IM = np.zeros_like(self.IM)
+        else:
+            self.IM = np.load(filename)
+        self.computeCM()
+
+    def flatten(self):
+        #self.wfcShm.write(self.flat)
+        self.wfc.run("flatten")
+        return
+    
+    def computeCM(self):
+        self.numActiveModes = self.numModes-self.numDroppedModes
+        if self.numActiveModes < 0:
+            print("Invalid Number of Modes used in CM. Check numDroppedModes")
+            return
+        self.CM[:self.numActiveModes,:] = np.linalg.pinv(self.IM[:,:self.numActiveModes], rcond=0)
+        self.CM[self.numActiveModes:,:] = 0
+        self.gCM = self.gain*self.CM
+        self.fIM = np.copy(self.IM)
+        self.fIM[:,self.numActiveModes:] = 0
+        return 
+        
+    # @jit(nopython=True)
+    def updateCorrectionPOL(self, correction=np.array([], dtype=np.float32), slopes=np.array([], dtype=np.float32)):
+            
+        # Compute POL Slopes s_{POL} = s_{RES} + IM*c_{n-1}
+        # print(f'slopes: {slopes.shape}, IM: {self.IM.shape}, corr: {correction.shape}')
+        s_pol = slopes - self.fIM@correction
+
+        # Update Command Vector c_n = g*CM*s_{POL} + (1 − g) c_{n-1}  https://arxiv.org/pdf/1903.12124.pdf Eq 3
+        return (1-self.gain)*correction - np.dot(self.gCM,s_pol)
+
+    def standardIntegratorPOL(self):
+
+        residual_slopes = self.signalShm.read()
+        currentCorrection = self.remoteWFC.run("read")
+        # print(f'slopes: {residual_slopes.shape}, IM: {self.IM.shape}, corr: {currentCorrection.shape}')
+
+        newCorrection = self.updateCorrectionPOL(correction=currentCorrection, 
+                                                 slopes=residual_slopes)
+        newCorrection[self.numActiveModes:] = 0
+        self.remoteWFC.run("write", newCorrection)
+
+        return
+
+    
+    def standardIntegrator(self):
+
+        slopes = self.signalShm.read()
+        currentCorrection = self.remoteWFC.run("read")
+        newCorrection = updateCorrection(correction=currentCorrection, 
+                                        gCM=self.gCM, 
+                                        slopes=slopes)
+        newCorrection[self.numActiveModes:] = 0
+        self.remoteWFC.run("write", newCorrection)
+        return
+    
+
+    def plotIM(self, row=None):
+        # if not (row is None):
+        #     row2D = signal2D(self.IM[:,row], )
+        #     plt.imshow(row2D, cmap = 'inferno')
+        #     plt.colorbar()
+        #     plt.show()
+        # else:
+        plt.imshow(self.IM, cmap = 'inferno', aspect='auto')
+        plt.show()
+
+if __name__ == "__main__":
+
+    # Create argument parser
+    parser = argparse.ArgumentParser(description="Read a config file from the command line.")
+
+    # Add command-line argument for the config file
+    parser.add_argument("-c", "--config", required=True, help="Path to the config file")
+    parser.add_argument("-p", "--port", required=True, help="Port for communication")
+
+    # Parse command-line arguments
+    args = parser.parse_args()
+
+    conf = read_yaml_file(args.config)
+
+    pid = os.getpid()
+    set_affinity((conf["loop"]["affinity"])%os.cpu_count()) 
+    decrease_nice(pid)
+
+    loop = Loop(conf=conf)
+    
+    l = Listener(loop, port= int(args.port))
+    while l.running:
+        l.listen()
+        time.sleep(1e-3)

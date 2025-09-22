@@ -86,30 +86,30 @@ class AndorIXon(WavefrontSensor):
         #                       buffer= self.img, 
         #                       dtype=np.float32)
         
-        data_float = self.data.astype(np.float32)
+        #data_float = self.data.astype(np.float32)
         
-        data_no_dark = self.data.astype(self.imageDType) - self.dark 
+        #data_no_dark = self.data.astype(self.imageDType) - self.dark
 
-        data_no_dark[data_no_dark<0] = 0
+        #data_no_dark[data_no_dark<0] = 0
 
 
-        if self.total_photon_flux > 0:
+        #if self.total_photon_flux > 0:
             #data_no_dark = self.sample_image_events(data_no_dark, self.total_photon_flux)
-            if np.sum(data_no_dark) != 0:
-                data_no_dark = (((data_no_dark) / np.sum(data_no_dark) * self.total_photon_flux))
+        #    if np.sum(data_no_dark) != 0:
+        #        data_no_dark = (((data_no_dark) / np.sum(data_no_dark) * self.total_photon_flux))
 
-        if self.activateNoise:
-            data_no_dark = (self.random_state_photon_noise.poisson(data_no_dark))
+        #if self.activateNoise:
+        #    data_no_dark = (self.random_state_photon_noise.poisson(data_no_dark))
 
-        if self.activateRONoise:
-            noise = np.int64(np.round(self.random_state_readout_noise.randn(data_no_dark.shape[0], data_no_dark.shape[1])*0.5))
-            noise[noise<0] = 0
-            data_no_dark += noise
+        #if self.activateRONoise:
+        #    noise = np.int64(np.round(self.random_state_readout_noise.randn(data_no_dark.shape[0], data_no_dark.shape[1])*0.5))
+        #    noise[noise<0] = 0
+        #    data_no_dark += noise
 
-        #super().expose()
-        self.imageRaw.write(self.data)
+        super().expose()
+        #self.imageRaw.write(self.data)
         #Check float here
-        self.image.write(data_no_dark.astype(self.imageDType))
+        #self.image.write(data_no_dark.astype(self.imageDType))
 
         return
     
