@@ -24,7 +24,8 @@ trwfs:
   idx: 0
   binning: 1
   exposure: 100 # in 10ns
-  nFrames: 100
+  nFrames: 48
+  nIntegFrames: 1
   width: 32  
   height: 64 
   darkCount: 100
@@ -36,10 +37,10 @@ trwfs:
 wfs:
   name: ANDOR_IXON
   idx: 0
-  binning: 1 #4
-  exposure: 0.01
-  width: 128 #32 
-  height: 128 #32
+  binning: 1 
+  exposure: 0.0625
+  width: 128 
+  height: 128
   darkCount: 1000
   darkFile: "res/andor_dark.npy"
   affinity: 3
@@ -50,7 +51,7 @@ wfs:
 #TODO  adjust the pupils here for REVOLT
 slopes:
   type: PYWFS
-  signalType: slopes
+  signalType: full_frame
   affinity: 4
   flatNorm: True
   binning: 1
@@ -63,3 +64,33 @@ slopes:
   - 107,106 #26,26 #107,106 #26,27 #53,54 #53, 54 #107,109 #107,106 # 106,107 54,53
   functions:
   - computeSignal
+
+
+#TODO  adjust the validSubAps for REVOLT
+tr_ff:
+  type: TRPYWFS
+  signalType: full_frame
+  affinity: 4
+  validSubApsFile: "res/SPADvalidAps.npy"
+  binning: 1
+  functions:
+  - computeSignal
+
+
+
+wfc:
+  name: "ALPAO"
+  serial: "alpaoHSDM277-15-005"
+  numActuators: 277
+  numModes: 100
+  #flatFile: "/home/revoltuser/pyRTC/REVOLT/wfcShape.npy" #"/home/revoltuser/pyRTC/REVOLT/eyeDoctor_07March2024.fits"
+  saveFile: "res/wfcShape.npy"
+  #m2cFile:  "res/m2c.npy"
+  #floatingActuatorFile: "/home/revoltuser/pyRTC/REVOLT/floatingActuators.npy"
+  #floatingInfluenceRadius: 1.5
+  affinity: 5
+  commandCap: 0.8
+  hardwareDelay: 0.001 #seconds
+  frameDelay: 0
+  functions:
+  - sendToHardware

@@ -4,6 +4,9 @@ from pyRTC.utils import *
 import os
 from pyRTC.hardware.AndorIXonCam import *
 from pyRTC.hardware.MPDSPADCam import *
+from pyRTC.FullFrameProcess import *
+from pyRTC.FullFrameProcessCustomArea import *
+from pyRTC.TimeResolvedFullFrameProcessCustomArea import *
 #%%
 
 config = '../REVOLT/SPAD_PC_config.yaml'
@@ -16,7 +19,6 @@ confWFS = conf["wfs"]
 wfs = AndorIXon(conf=confWFS)
 wfs.open_shutter()
 wfs.start()
-wfs.setExposure(0.0625)
 
 #%%
 
@@ -40,9 +42,33 @@ time.sleep(1)
 ################## Setup MPD SPAD Camera ##############
 confTRWFS = conf["trwfs"]
 trwfs = MPDSPADCam(conf=confTRWFS)
+trwfs.start()
 
+#%%
+for i in range(100):
+    trwfs.expose()
 
 #%%
 trwfs.plot()
 
 #%%
+################## Setup Full Frame Signal ##############
+
+# For normal PWFS
+#sig = FullFrameProcess(conf=conf)
+#sig.start()
+
+# For TR PWFS
+sig = TimeResolvedFullFrameProcessCustomArea(conf=conf)
+sig.start()
+
+
+#%%
+################## Setup loop ##############
+
+
+
+
+
+
+

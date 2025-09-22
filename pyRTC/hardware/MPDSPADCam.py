@@ -100,9 +100,11 @@ class MPDSPADCam(TimeResolvedWavefrontSensor):
 
         # TODO do we want to use other counters?
         self.frames = self.cam.SnapGetImageBuffer()[0]  # frames of counter 1 
+        if self.frames.shape[0] != self.nFrames: # Sometimes the snap returns nothing, TODO check to use a flag check maybe?
+            return
         self.data = np.ndarray((self.frames.shape[0],self.frames.shape[1], self.frames.shape[2]), 
                             buffer= np.ascontiguousarray(self.frames), 
-                            dtype=np.uint16)
+                            dtype=self.frames.dtype)
         super().expose()
         return
     

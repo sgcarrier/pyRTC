@@ -3,6 +3,7 @@ Loop Superclass
 """
 from pyRTC.Pipeline import *
 from pyRTC.utils import *
+from pyRTC.pyRTCComponent import *
 import threading
 import argparse
 import sys
@@ -13,25 +14,58 @@ import time
 from numba import jit
 from sys import platform
 
-from pyRTC.SlopesProcess import SlopesProcess
+
 
 @jit(nopython=True)
 def computeFullFramePYWFS(p1=np.array([],dtype=np.float32), 
                        p2=np.array([],dtype=np.float32),
                        p3=np.array([],dtype=np.float32), 
-                       p4=np.array([],dtype=np.float32), 
-                       flatNorm=True):
+                       p4=np.array([],dtype=np.float32)):
     signal = np.concatenate((p1,p2,p3,p4))
     #signal_normed = signal / np.sum(signal)
 
     return signal
 
-class FullFrameProcess(SlopesProcess):
+class FullFrameProcess(pyRTCComponent):
 
     def __init__(self, conf) -> None:
 
-        super().__init__(conf)
 
+        self.confWFS = conf["wfs"]
+        self.name = "Slopes"
+        self.imageShape = (self.confWFS["width"], self.confWFS["height"])
+
+        self.conf = conf["slopes"]
+
+        #Read wfs images's metadata and open a stream to the shared memory
+        self.wfsMeta = ImageSHM("wfs_meta", (ImageSHM.METADATA_SIZE,), np.float64).read_noblock_safe()
+        self.imageDType = float_to_dtype(self.wfsMeta[3])
+        self.wfsShm = ImageSHM("wfs", self.imageShape, self.imageDType)
+
+        self.signalDType = np.float32
+        # self.signal = ImageSHM("signal", self.imageShape, self.signalDType)
+        self.imageNoise = setFromConfig(self.conf,"imageNoise", 0)
+
+        self.wfsType = self.conf["type"] 
+        self.signalType = self.conf["signalType"] 
+        self.validSubAps = None
+
+        if self.wfsType.lower() == "pywfs":
+            #Check if we have specified a pupil validSubAps
+            # self.signal = ImageSHM("signal", self.imageShape, self.signalDType)
+            if "pupils" in self.conf.keys():
+                pupilLocs = [(int(x.split(',')[1]), int(x.split(',')[0])) for x in self.conf["pupils"]]
+                self.setPupils(pupilLocs, self.conf["pupilsRadius"])
+            else: #Default Pupil validSubAps
+                a, b = int(0.25*self.imageShape[0]), int(0.75*self.imageShape[0])
+                c, d = int(0.25*self.imageShape[1]), int(0.75*self.imageShape[1])
+                r = min(self.imageShape[0]-b,self.imageShape[1]-d)
+                self.setPupils([(a,c), (a,d), (b,c), (b,d)], r)
+
+        else:
+            raise Exception("wfs type not yet supported")
+
+        super().__init__(self.conf)
 
         self.refSignal = np.zeros((self.signalSize))
         return
@@ -40,7 +74,33 @@ class FullFrameProcess(SlopesProcess):
         self.stop()
         self.alive=False
         return
+    
+    def read(self):
+        return self.signal.read()
+    
+    def readImage(self):
+        return self.wfsShm.read()
 
+    def setValidSubAps(self, validSubAps):
+        self.validSubAps = validSubAps.astype('bool')
+        return
+    
+    def saveValidSubAps(self,filename=''):
+        if filename == '':
+            filename = self.validSubApsFile
+        np.save(filename, self.validSubAps)
+        return
+
+    def loadValidSubAps(self,filename=''):
+        #If no file given, first try reference slopes file
+        if filename == '':
+            filename = self.validSubApsFile
+        #If we are still without a file, set zeros
+        if filename == '':
+            self.validSubAps = np.ones_like(self.validSubAps)
+        else: #If we have a filename
+            self.validSubAps = np.load(filename).astype(self.validSubAps.dtype)
+        return
 
 
     def takeRefFullFrame(self):
@@ -48,56 +108,26 @@ class FullFrameProcess(SlopesProcess):
         ff_signal = np.zeros((self.signalSize))
         for i in range(iters):
             image = self.readImage().astype(self.signalDType)
-            if self.signalType == "slopes": #TODO change this for full_frame
+            if self.signalType == "full_frame": #TODO change this for full_frame
                 if self.wfsType == "PYWFS":
                     p1,p2,p3,p4 = image[self.p1mask], image[self.p2mask], image[self.p3mask], image[self.p4mask]
                     ff_signal += computeFullFramePYWFS(p1=p1,
                                                         p2=p2,
                                                         p3=p3,
-                                                        p4=p4,
-                                                        flatNorm=self.flatNorm)
+                                                        p4=p4)
         ff_signal /= iters
         self.refSignal = ff_signal
                 
-
-
-
-    def takeRefSlopes(self):    
-        return 
-
-    def setRefSlopes(self, refSlopes):
-        return
-    
-    def saveRefSlopes(self,filename=''):
-        return
-
-    def loadRefSlopes(self,filename=''):
-        return
     
     def computeSignal(self):
         image = self.readImage().astype(self.signalDType)
-        if self.signalType == "slopes":
+        if self.signalType == "full_frame":
             if self.wfsType == "PYWFS":
                 p1,p2,p3,p4 = image[self.p1mask], image[self.p2mask], image[self.p3mask], image[self.p4mask]
                 ff_signal = computeFullFramePYWFS(p1=p1,
                                                     p2=p2,
                                                     p3=p3,
-                                                    p4=p4,
-                                                    flatNorm=self.flatNorm)
-                
-                
-                    
-            elif self.wfsType == "SHWFS":
-                
-                # threshold = np.std(image[image < np.mean(image)])*self.shwfsContrast
-                threshold = self.imageNoise*self.shwfsContrast
-                image[image < threshold] = 0
-                slopes = computeSlopesSHWFS(image, 
-                                                    self.refSlopes, 
-                                                    self.subApSpacing,
-                                                    self.offsetX,
-                                                    self.offsetY)
-                slope_signal = slopes[self.validSubAps]
+                                                    p4=p4)
 
             self.signal.write(ff_signal-self.refSignal)
             self.signal2D.write(self.computeSignal2D(ff_signal-self.refSignal))
@@ -115,7 +145,7 @@ class FullFrameProcess(SlopesProcess):
         self.pupilLocs = pupilLocs
         self.pupilRadius = pupilRadius
         self.computePupilsMask()
-        if self.signalType == "slopes":
+        if self.signalType == "full_frame":
             self.signalSize = np.count_nonzero(self.pupilMask)
             slopemask =  self.pupilMask[self.pupilLocs[0][1]-self.pupilRadius+1:self.pupilLocs[0][1]+self.pupilRadius, 
                                         self.pupilLocs[0][0]-self.pupilRadius+1:self.pupilLocs[0][0]+self.pupilRadius] > 0
