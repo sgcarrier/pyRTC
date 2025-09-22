@@ -109,15 +109,21 @@ class MPDSPADCam(TimeResolvedWavefrontSensor):
     
     def record_data(self, number_of_acquisitions, filename_prefix, to_fits=True, to_hdf5=True):
 
-        data_cube = np.zeros((number_of_acquistions, self.frames.shape[0], self.frames.shape[1], self.frames.shape[2]))
+        data_cube = np.zeros((number_of_acquisitions, self.frames.shape[0], self.frames.shape[1], self.frames.shape[2]))
+
+        new_acq =  self.read()
 
         for acq in range(number_of_acquisitions):
-            data_cube[acq,:,:,:] = self.read()
+            if acq == 0:
+                data_cube[acq,:,:,:] = new_acq
+            else:
+                if data_cube[acq-1,:,:,:] != new_acq:  #Avoid recording the same acquisition back to back
+                    data_cube[acq,:,:,:] = new_acq
 
         if to_fits:
-            self.save_images_to_fits(data_cube, f"{filename}.hdf5")
+            self.save_images_to_fits(data_cube, f"{filename_prefix}.fits")
         if to_hdf5:
-            self.save_images_to_hdf5(data_cube, f"{filename}.hdf5")
+            self.save_images_to_hdf5(data_cube, f"{filename_prefix}.hdf5")
 
 
 
