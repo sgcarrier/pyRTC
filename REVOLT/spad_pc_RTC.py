@@ -2,8 +2,7 @@
 from pyRTC.Pipeline import *
 from pyRTC.utils import *
 import os
-from pyRTC.hardware.AndorIXonCam import *
-
+from pyRTC.WavefrontCorrector import *
 
 LISTENING_PORT = 3000
 
@@ -13,24 +12,24 @@ conf = read_yaml_file(config)
 
 #%%
 ################## Setup Andor Camera ##############
-confWFS = conf["wfs"]
-wfs = AndorIXon(conf=confWFS)
-wfs.open_shutter()
-wfs.start()
-wfs.setExposure(0.0625)
+confWFC = conf["wfc"]
+dummy_wfc = WavefrontCorrector(conf=confWFC)
+dummy_wfc.start()
 
 
 #%%
-l_wfs = Listener(wfs, port= int(LISTENING_PORT), host="0.0.0.0")
-while l_wfs.running:
-    l_wfs.listen()
-    time.sleep(1e-3)
-# %%
+l_wfc = Listener(dummy_wfc, port= int(LISTENING_PORT), host="0.0.0.0")
+count = 0
+count_max = 10000
 
-wfs.stop()
-time.sleep(1)
-wfs.close_shutter()
-time.sleep(1)
-wfs.close_camera()
-
-# %%
+try:
+    while l_wfc.running:
+        l_wfc.listen()
+        time.sleep(1e-3)
+        count += 1
+        if count > count_max:
+            print(dummy_wfc.correctionVector)
+            count = 0
+except KeyboardInterrupt:
+    print("\nKeyboardInterrupt caught! Exiting loop gracefully.")
+    l_wfc.stop()

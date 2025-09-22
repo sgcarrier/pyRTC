@@ -45,11 +45,7 @@ trwfs = MPDSPADCam(conf=confTRWFS)
 trwfs.start()
 
 #%%
-for i in range(100):
-    trwfs.expose()
-
-#%%
-trwfs.plot()
+trwfs.record_data(100, "test2")
 
 #%%
 ################## Setup Full Frame Signal ##############
