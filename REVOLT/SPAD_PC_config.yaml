@@ -9,7 +9,7 @@
 ##############################################################
 
 loop:
-  gain: 0.5
+  gain: 0.1
   numDroppedModes: 0
   pokeAmp: 0.01 #
   numItersIM: 5
@@ -17,6 +17,17 @@ loop:
   method: push-pull
   functions:
   - standardIntegrator
+
+
+trloop:
+  gain: 0.1
+  numDroppedModes: 0
+  pokeAmp: 0.01 #
+  numItersIM: 5
+  affinity: 2
+  method: push-pull
+  functions:
+  - timeResolvedIntegratorWithTurbulence
 
 
 trwfs:

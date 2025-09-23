@@ -39,12 +39,12 @@ def updateCorrection(correction=np.array([], dtype=np.float32),
 
 class LoopWithRemoteWFS(pyRTCComponent):
 
-    def __init__(self, conf, remoteWFC) -> None:
+    def __init__(self, conf, remoteWFC, settings_name="loop") -> None:
 
         self.confWFS = conf["wfs"]
         self.confWFC = conf["wfc"]
-        self.confLoop = conf["loop"]
-        self.name = "Loop"
+        self.confLoop = conf[settings_name]
+        self.name = settings_name
         
         #Read wfs signal's metadata and open a stream to the shared memory
         self.signalMeta = ImageSHM("signal_meta", (ImageSHM.METADATA_SIZE,), np.float64).read_noblock_safe()
