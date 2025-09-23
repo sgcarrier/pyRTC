@@ -242,7 +242,7 @@ class hardwareLauncher:
         return -1
 
     def write(self, message):
-        message = json.dumps(message)
+        message = json.dumps(message, default=numpy_serializer)
         self.processSocket.send(message.encode())
         return
     

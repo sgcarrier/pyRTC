@@ -37,7 +37,7 @@ def updateCorrection(correction=np.array([], dtype=np.float32),
 #                      slopes=np.array([], dtype=np.float32)):
 #     return correction - np.dot(gCM,slopes) + pertub
 
-class Loop(pyRTCComponent):
+class LoopWithRemoteWFS(pyRTCComponent):
 
     def __init__(self, conf, remoteWFC) -> None:
 
@@ -196,7 +196,7 @@ class Loop(pyRTCComponent):
     def standardIntegratorPOL(self):
 
         residual_slopes = self.signalShm.read()
-        currentCorrection = self.remoteWFC.run("read")
+        currentCorrection = np.array(self.remoteWFC.getProperty("currentCorrection"))
         # print(f'slopes: {residual_slopes.shape}, IM: {self.IM.shape}, corr: {currentCorrection.shape}')
 
         newCorrection = self.updateCorrectionPOL(correction=currentCorrection, 
@@ -210,7 +210,7 @@ class Loop(pyRTCComponent):
     def standardIntegrator(self):
 
         slopes = self.signalShm.read()
-        currentCorrection = self.remoteWFC.run("read")
+        currentCorrection = np.array(self.remoteWFC.getProperty("currentCorrection"))
         newCorrection = updateCorrection(correction=currentCorrection, 
                                         gCM=self.gCM, 
                                         slopes=slopes)
