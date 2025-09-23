@@ -61,11 +61,19 @@ def updateCorrectionTRFF_weighted(correction=np.array([], dtype=np.float64),
                        slopes_TR=np.array([[]], dtype=np.float64),
                        weights=np.array([[]], dtype=np.float64),
                        ref_signal_per_mode_normed=np.array([[]], dtype=np.float64),):
-    signal_per_mode =(slopes_TR[:,:,np.newaxis] * weights[np.newaxis, :, :]).reshape(-1, weights.shape[-1]) 
-    signal_per_mode_normed = signal_per_mode / np.sum(signal_per_mode, axis=0)
-    #TODO Might be able to optimize this with einsum
-    nModes = weights.shape[1]
-    new_corr = np.array([np.dot(gCM.astype(np.float64)[i,:],  (signal_per_mode_normed - ref_signal_per_mode_normed)[:,i]) for  i in range(nModes)])
+    nModes= weights.shape[1]
+    new_corr = np.zeros(gCM.shape[0], dtype=np.float64)
+    for mode in range(nModes):
+        signal_for_mode = (slopes_TR[:,:] * weights[np.newaxis, :, mode]).flatten()
+        if np.sum(signal_for_mode) != 0:
+            signal_for_mode /= np.sum(signal_for_mode)
+
+        signal_final = signal_for_mode - ref_signal_per_mode_normed[:,mode]
+        #new_corr[mode] = np.dot(gCM[mode, :],signal_final[:])
+        for k in range(gCM.shape[1]):
+           if signal_for_mode[k] != 0:
+               new_corr[mode] += gCM[mode, k] * signal_final[k]
+
     return correction - new_corr
 
 
@@ -118,6 +126,13 @@ class TimeResolvedLoop(Loop):
 
         self.FF_active= False
         self.FF_weighted_active= False
+
+
+        self.FF_w_correction_function = updateCorrectionTRFF_weighted
+        self.FF_correction_function =  updateCorrectionTRFF
+        self.TR_norm_correction_function = updateCorrectionTR
+
+
 
         self.loadPushPullCube()
 
@@ -411,7 +426,7 @@ class TimeResolvedLoop(Loop):
 
         if self.FF_active:
             if self.ref_signal_normed is not None:
-                newCorrection = updateCorrectionTRFF(correction=self.currentCorrection, 
+                newCorrection = self.FF_correction_function(correction=self.currentCorrection,
                                                 gCM=self.gCM, 
                                                 slopes_TR=self.latest_slopes.flatten(),
                                                 ref_signal_normed = self.ref_signal_normed)
@@ -420,7 +435,7 @@ class TimeResolvedLoop(Loop):
                 return
         elif self.FF_weighted_active:
             if self.ref_signal_per_mode_normed is not None:
-                newCorrection = updateCorrectionTRFF_weighted(correction=self.currentCorrection, 
+                newCorrection = self.FF_w_correction_function(correction=self.currentCorrection,
                                                 gCM=self.gCM, 
                                                 slopes_TR=self.latest_slopes,
                                                 weights=self.frame_weights,
@@ -430,7 +445,7 @@ class TimeResolvedLoop(Loop):
                 return
         else:
             if self.ref_signal_per_mode_normed is not None:
-                newCorrection = updateCorrectionTR(correction=self.currentCorrection, 
+                newCorrection = self.TR_norm_correction_function(correction=self.currentCorrection,
                                                 gCM=self.gCM, 
                                                 slopes_TR=self.latest_slopes,
                                                 weights=self.frame_weights,
