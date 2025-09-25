@@ -20,6 +20,8 @@ class MPDSPADCam(TimeResolvedWavefrontSensor):
         self.setNIntegFrames(setFromConfig(conf, "nIntegFrames", 300))
         self.setNCounters(setFromConfig(conf, "nCounters", 1))
 
+        self.screamers = [(20,12)]
+
         self.cam = Hermes(Hermes.CameraMode.NORMAL) # Start in normal
         self.cam.SetCameraPar(Exposure = self.exposure,  # if in normal mode, this is ignored and forced to 10.40 us, else is in 10ns increments
                                 NFrames = self.nFrames, 
@@ -29,7 +31,12 @@ class MPDSPADCam(TimeResolvedWavefrontSensor):
                                 Half_array = Hermes.State.DISABLED, 
                                 Signed_data = Hermes.State.DISABLED)
         self.cam.ApplySettings()
-        
+        self.inSyncMode = False
+
+        #self._data_cube = np.zeros((100, self.frames.shape[0], self.frames.shape[1], self.frames.shape[2]))
+        #self._number_of_acquisitions = 100
+        self._done_recording = False
+        self._start_recording = False 
         super().__init__(conf)
         return 
 
@@ -80,9 +87,11 @@ class MPDSPADCam(TimeResolvedWavefrontSensor):
         if (int(self.nFrames) > 100) or (int(self.nFrames) < 0):
             print("Change the nFrames parameter first, limit is 100 frames for sync mode")
         self.cam.SetSyncInState(Hermes.State.ENABLED, int(self.nFrames))
+        self.inSyncMode = True 
 
     def disable_sync_mode(self):
         self.cam.SetSyncInState(Hermes.State.DISABLED, 0)
+        self.inSyncMode = False
 
     def advancedMode(self, adv):
         if self.running:
@@ -94,25 +103,87 @@ class MPDSPADCam(TimeResolvedWavefrontSensor):
                 self.cam.SetAdvancedMode(Hermes.State.DISABLED)
 
     def expose(self):
-        
-        self.cam.SnapPrepare() # TODO I think this becomes blocking when in sync mode. Otherwise, might have to use IsTriggered()
-        self.cam.SnapAcquire()
+        if self.cam.IsTriggered() or (not self.inSyncMode) :
+            self.cam.SnapPrepare()
+            self.cam.SnapAcquire()
 
-        # TODO do we want to use other counters?
-        self.frames = self.cam.SnapGetImageBuffer()[0]  # frames of counter 1 
-        if self.frames.shape[0] != self.nFrames: # Sometimes the snap returns nothing, TODO check to use a flag check maybe?
-            return
-        self.data = np.ndarray((self.frames.shape[0],self.frames.shape[1], self.frames.shape[2]), 
-                            buffer= np.ascontiguousarray(self.frames), 
-                            dtype=self.frames.dtype)
-        super().expose()
+            # TODO do we want to use other counters?
+            self.frames = self.cam.SnapGetImageBuffer()[0]  # frames of counter 1 
+            if self.frames.shape[0] != self.nFrames: # Sometimes the snap returns nothing, TODO check to use a flag check maybe?
+                return
+            
+            for idx in self.screamers:
+                self.frames[:,idx[0], idx[1]] = 0
+
+            #self.frames = np.swapaxes(self.frames, 1,2)
+            
+            self.data = np.ndarray((self.frames.shape[0],self.frames.shape[1], self.frames.shape[2]), 
+                                buffer= np.ascontiguousarray(self.frames), 
+                                dtype=self.frames.dtype)
+            
+
+            super().expose()
+
+            if self._start_recording:
+                self._data_cube[self._acq_number,:,:,:] = self.frames
+                self._acq_number += 1
+                if self._acq_number >= self._number_of_acquisitions:
+                    self._done_recording = True
+                    self._start_recording = False
         return
     
     
+    def record_data_direct(self, number_of_acquisitions, filename_prefix, to_fits=True, to_hdf5=True):
+
+        self._acq_number = 0
+        self._number_of_acquisitions = number_of_acquisitions
+        self._data_cube = np.zeros((number_of_acquisitions, self.frames.shape[0], self.frames.shape[1], self.frames.shape[2]))
+        self._done_recording = False
+        self._start_recording = True
+        while (self._done_recording == False):
+            time.sleep(0.01)
+
+        if to_fits:
+            self.save_images_to_fits(self._data_cube, f"{filename_prefix}.fits")
+        if to_hdf5:
+            self.save_images_to_hdf5(self._data_cube, f"{filename_prefix}.hdf5")
+
+
+    def record_data_bypass(self, number_of_acquisitions, filename_prefix, to_fits=True, to_hdf5=True):
+
+        if self.running:
+            print("Stop running before calling this function")
+            return 
+
+        data_cube = np.zeros((number_of_acquisitions, self.frames.shape[0], self.frames.shape[1], self.frames.shape[2]))
+        acq = 0
+        while (acq < number_of_acquisitions) :
+            if self.cam.IsTriggered() or (not self.inSyncMode) :
+                self.cam.SnapPrepare()
+                self.cam.SnapAcquire()
+                new_acq = self.cam.SnapGetImageBuffer()[0]
+
+                if new_acq.shape[0] != self.nFrames:  # Sometimes the snap returns nothing
+                    continue 
+
+                #print(f"{acq}/{number_of_acquisitions}")
+                if acq == 0:
+                    data_cube[acq,:,:,:] = new_acq
+                    acq += 1
+                else:
+                    #if not np.array_equal(data_cube[acq-1,:,:,:], new_acq):  #Avoid recording the same acquisition back to back
+                    data_cube[acq,:,:,:] = new_acq
+                    acq += 1
+
+        if to_fits:
+            self.save_images_to_fits(data_cube, f"{filename_prefix}.fits")
+        if to_hdf5:
+            self.save_images_to_hdf5(data_cube, f"{filename_prefix}.hdf5")
+
+
     def record_data(self, number_of_acquisitions, filename_prefix, to_fits=True, to_hdf5=True):
 
         data_cube = np.zeros((number_of_acquisitions, self.frames.shape[0], self.frames.shape[1], self.frames.shape[2]))
-
         acq = 0
         while (acq < number_of_acquisitions) :
             new_acq =  self.read()
@@ -126,10 +197,9 @@ class MPDSPADCam(TimeResolvedWavefrontSensor):
                     acq += 1
 
         if to_fits:
-            self.save_images_to_fits(data_cube, f"{filename_prefix}.fits")
+            self.save_images_to_fits(self._data_cube, f"{filename_prefix}.fits")
         if to_hdf5:
-            self.save_images_to_hdf5(data_cube, f"{filename_prefix}.hdf5")
-
+            self.save_images_to_hdf5(self._data_cube, f"{filename_prefix}.hdf5")
 
 
     def save_images_to_fits(self, data_cube, filename, headers=None, overwrite=True):
@@ -152,7 +222,7 @@ class MPDSPADCam(TimeResolvedWavefrontSensor):
         """
 
         # Create primary HDU
-        primary_hdu = fits.PrimaryHDU(data_cube)
+        primary_hdu = fits.PrimaryHDU(data_cube.astype('<f8'))
 
         # Add headers if provided
         if headers:

@@ -1,5 +1,6 @@
 from pyRTC.Loop import *
-from scripts.modulation_weights import *
+#from scripts.modulation_weights import *
+from pyRTC.LoopWithRemoteWFC import *
 import pickle
 
 @jit(nopython=True)
@@ -90,32 +91,63 @@ def calc_TRFF_residual_weighted(CM=np.array([[]], dtype=np.float64),
     new_corr = np.array([np.dot(CM.astype(np.float64)[i,:],  (signal_per_mode_normed - ref_signal_per_mode_normed)[:,i]) for  i in range(nModes)])
     return new_corr
 
-class TimeResolvedLoopWithRemoteWFC(LoopWithRemoteWFS):
+class TimeResolvedLoopWithRemoteWFC(pyRTCComponent):
 
 
-    def __init__(self, conf,  settings_name="loop" ) -> None:
+    def __init__(self, conf,  remoteWFC, settings_name="loop" ) -> None:
+        
         #Initialize the pyRTC Loop super class
-        super().__init__(conf, settings_name=settings_name)
+        self.confWFS = conf["trwfs"]
+        self.confWFC = conf["wfc"]
+        self.confLoop = conf[settings_name]
+        self.name = settings_name
 
         self.numFrames  = conf['trwfs']['nFrames']
-        #self.weightFile = setFromConfig(self.confLoop, "weightFile", "")
-        #self.loadWeights()
+        
+        #Read wfs signal's metadata and open a stream to the shared memory
+        self.signalMeta = ImageSHM("signal_meta", (ImageSHM.METADATA_SIZE,), np.float64).read_noblock_safe()
+        self.signalDType = float_to_dtype(self.signalMeta[3])
+        self.signalSize = int(self.signalMeta[2]//self.signalDType.itemsize) //  self.numFrames 
+        self.signalShm = ImageSHM("signal", (self.numFrames ,self.signalSize  ), self.signalDType)
+        self.nullSignal = np.zeros(( self.numFrames, self.signalSize ), dtype=self.signalDType)
 
+        #Read wfs SLOPES metadata and open a stream to the shared memory
+        self.signal2DMeta = ImageSHM("signal2D_meta", (ImageSHM.METADATA_SIZE,), np.float64).read_noblock_safe()
+        self.signal2DDType = float_to_dtype(self.signal2DMeta[3])
+        self.signal2DSize = int(self.signal2DMeta[2]//self.signal2DDType.itemsize)
+        self.signal2D_width, self.signal2D_height = int(self.signal2DMeta[4]),  int(self.signal2DMeta[5])
+        print(self.signal2DMeta[3], (self.signal2D_width, self.signal2D_height), self.signal2DDType)
+        self.signal2DShm = ImageSHM("signal2D", (self.signal2D_width, self.signal2D_height), self.signal2DDType)
 
+        self.remoteWFC = remoteWFC
+        self.numModes = self.confWFC['numModes']
+
+        self.numDroppedModes = setFromConfig(self.confLoop, "numDroppedModes", 0)
+        self.numActiveModes = self.numModes - self.numDroppedModes
+        self.flat = np.zeros(self.numModes, dtype=np.float32)
+
+        self.gain = setFromConfig(self.confLoop, "gain", 0.1)
+        self.leakyGain = setFromConfig(self.confLoop, "leakyGain", 0)
+        self.perturbAmp = 0
+        self.hardwareDelay = setFromConfig(self.confWFC, "hardwareDelay", 0)
+        self.pokeAmp = setFromConfig(self.confLoop, "pokeAmp", 1e-2)
+        self.numItersIM = setFromConfig(self.confLoop, "numItersIM", 100) 
+        self.delay = setFromConfig(self.confLoop, "delay", 0)
+        self.IMMethod = setFromConfig(self.confLoop, "IMMethod", "push-pull") 
+        self.IMFile = setFromConfig(self.confLoop, "IMFile", "")
+        
         self.IM_cube = np.zeros((self.signalSize, self.numFrames, self.numModes),dtype=self.signalDType)
         self.push_cube = np.zeros((self.signalSize, self.numFrames, self.numModes),dtype=self.signalDType)
         self.pull_cube = np.zeros((self.signalSize, self.numFrames, self.numModes),dtype=self.signalDType)
 
         self.push_pull_cube_file = setFromConfig(self.confLoop, "pushPullFile", "")
-
+        self.leakyGain = 0.0
         
-
         self.currentCorrection = np.zeros((self.numModes))
         self.newCorrection_tmp_delay_1 =  np.zeros((self.numModes))
-        self.signal_TR_ref =  np.zeros((self.signalSize, 48))
+        self.signal_TR_ref =  np.zeros((self.signalSize, self.numFrames))
 
         self.first_loop = True
-
 
         self.delay = 0
 
@@ -131,11 +163,22 @@ class TimeResolvedLoopWithRemoteWFC(LoopWithRemoteWFS):
         self.FF_correction_function =  updateCorrectionTRFF
         self.TR_norm_correction_function = updateCorrectionTR
 
-
-
         self.loadPushPullCube()
 
+        super().__init__(self.confLoop)    
 
+
+    def setGain(self, gain):
+        self.gain = gain
+        self.gCM = self.gain*self.CM
+        return
+
+    def setPeturbAmp(self, amp):
+        self.perturbAmp = amp
+        return
+
+    def convertForTransmission(self, data):
+        return (data*1e9).astype(np.int32)
 
     def loadWeights(self,filename=''):
         self.frame_weights = np.ones((self.numFrames,self.numModes)) / self.numFrames
@@ -203,67 +246,6 @@ class TimeResolvedLoopWithRemoteWFC(LoopWithRemoteWFS):
         return order
 
 
-
-    def pushPullIM_cube(self, maxNumModes=None):
-
-        if maxNumModes is None:
-            maxNumModes = self.numModes
-        if maxNumModes > self.numModes:
-            maxNumModes = self.numModes
-
-        ref_slopes = np.zeros((self.signalSize, self.numFrames))
-
-
-        #Average out N new WFS frames
-        ref_slopes[:,s] =  np.zeros((self.signalSize))
-        for n in range(self.numItersIM):
-            ref_slopes[:,:] += self.signalShm.read().T
-        ref_slopes[:,:] /= self.numItersIM
-
-        #For each mode
-        for i in range(maxNumModes):
-            #Reset the correction
-            correction = self.flat.copy()
-            #Plus amplitude
-            correction[i] = self.pokeAmp
-            #Post a new shape to be made
-            self.wfcShm.write(correction)
-            #Add some delay to ensure one-to-one
-            time.sleep(self.hardwareDelay)
-            #Burn the first new image since we were moving the DM during the exposure
-            self.signalShm.read()
-
-            tmp_plus =  np.zeros((self.signalSize, self.numFrames))
-   
-            #Average out N new WFS frames
-            for n in range(self.numItersIM):
-                tmp_plus[:,:] += self.signalShm.read().T
-            tmp_plus[:,:] /= self.numItersIM
-            tmp_plus = tmp_plus - ref_slopes
-
-            #minus amplitude
-            correction[i] = -self.pokeAmp
-            #Post a new shape to be made
-            self.wfcShm.write(correction)
-            #Add some delay to ensure one-to-one
-            time.sleep(self.hardwareDelay)
-            #Burn the first new image since we were moving the DM during the exposure
-            self.signalShm.read()
-
-            tmp_minus =  np.zeros((self.signalSize, self.numFrames))
-
-            #Average out N new WFS frames
-            for n in range(self.numItersIM):
-                tmp_minus += self.signalShm.read().T
-            tmp_minus /= self.numItersIM
-
-            tmp_minus = tmp_minus - ref_slopes
-
-            #Compute the normalized difference
-            self.IM_cube[:,:,i] = (tmp_plus-tmp_minus)/(2*self.pokeAmp)
-
-        return
-
     def pushPullRef_cube(self, maxNumModes=None):
         
         if maxNumModes is None:
@@ -281,19 +263,18 @@ class TimeResolvedLoopWithRemoteWFC(LoopWithRemoteWFS):
         #For each mode
         for i in range(maxNumModes):
 
-            currentModePokeAmp = self.pokeAmp /np.sqrt(self.findModeOrder(i))
+            currentModePokeAmp = self.pokeAmp #/np.sqrt(self.findModeOrder(i))
             print(f"pushPullRef_cube - Mode {i}/{maxNumModes}, with pokeAmp={currentModePokeAmp}")
             #Reset the correction
             correction = self.flat.copy()
             #Plus amplitude
             correction[i] = currentModePokeAmp
             #Post a new shape to be made
-            self.wfcShm.write(correction)
+            self.remoteWFC.run("write", self.convertForTransmission(correction))
             #Add some delay to ensure one-to-one
             time.sleep(self.hardwareDelay)
             #Burn the first new image since we were moving the DM during the exposure
             self.signalShm.read()
-
 
             self.tmp_plus =  np.zeros((self.signalSize, self.numFrames))
             #Average out N new WFS frames
@@ -301,12 +282,10 @@ class TimeResolvedLoopWithRemoteWFC(LoopWithRemoteWFS):
                 self.tmp_plus += self.signalShm.read().T
             self.tmp_plus /= self.numItersIM
 
-
-
             #minus amplitude
             correction[i] = -currentModePokeAmp
             #Post a new shape to be made
-            self.wfcShm.write(correction)
+            self.remoteWFC.run("write", self.convertForTransmission(correction))
             #Add some delay to ensure one-to-one
             time.sleep(self.hardwareDelay)
             #Burn the first new image since we were moving the DM during the exposure
@@ -354,6 +333,53 @@ class TimeResolvedLoopWithRemoteWFC(LoopWithRemoteWFS):
             self.delay = newDelay
         else:
             self.delay = newDelay
+
+
+    def timeResolvedIntegratorWithLeak(self):
+
+        self.currentCorrection = (1-self.leakyGain)*np.array(self.remoteWFC.getProperty("currentCorrection"))
+
+        # Remove this next line because it would grab the current correction AND turbulence applied to the DM 
+        #currentCorrection = self.wfcShm.read()
+
+        if self.FF_active:
+            if self.ref_signal_normed is not None:
+                newCorrection = self.FF_correction_function(correction=self.currentCorrection,
+                                                gCM=self.gCM, 
+                                                slopes_TR=self.latest_slopes.flatten(),
+                                                ref_signal_normed = self.ref_signal_normed)
+            else:
+                print("Error: ref signal never defined, skipping loop")
+                return
+        elif self.FF_weighted_active:
+            if self.ref_signal_per_mode_normed is not None:
+                newCorrection = self.FF_w_correction_function(correction=self.currentCorrection,
+                                                gCM=self.gCM, 
+                                                slopes_TR=self.latest_slopes,
+                                                weights=self.frame_weights,
+                                                ref_signal_per_mode_normed = self.ref_signal_per_mode_normed)
+            else:
+                print("Error: ref signal never defined, skipping loop")
+                return
+        else:
+            if self.ref_signal_per_mode_normed is not None:
+                newCorrection = self.TR_norm_correction_function(correction=self.currentCorrection,
+                                                gCM=self.gCM, 
+                                                slopes_TR=self.latest_slopes,
+                                                weights=self.frame_weights,
+                                                ref_signal_per_mode_normed = self.ref_signal_per_mode_normed)
+            else:
+                print("Error: weighted ref signal never defined, skipping loop")
+                return
+        newCorrection[self.numActiveModes:] = 0
+
+        if np.isnan(newCorrection).any(): 
+            self.currentCorrection = self.currentCorrection # dont change correction due to nan 
+        else:
+            self.currentCorrection = newCorrection # Safe to update
+        self.remoteWFC.run("write", self.convertForTransmission(self.currentCorrection))
+
+
 
     def timeResolvedIntegratorWithTurbulence(self):
 
@@ -420,7 +446,7 @@ class TimeResolvedLoopWithRemoteWFC(LoopWithRemoteWFS):
             self.currentCorrection = self.currentCorrection # dont change correction due to nan 
         else:
             self.currentCorrection = newCorrection # Safe to update
-        self.wfcShm.write(self.currentCorrection + self.turbModes)
+        self.remoteWFC.run("write", self.convertForTransmission(self.currentCorrection + self.turbModes))
 
     def resetCurrentCorrection(self):
         self.currentCorrection = np.zeros((self.numModes))
@@ -558,18 +584,3 @@ class TimeResolvedLoopWithRemoteWFC(LoopWithRemoteWFS):
         plt.show()
 
 
-
-    # def calcFrameWeights(self, maxNumModes=None):
-    #     '''
-    #     Calculate the weights to give to every frame for every mode
-    #     '''
-    #     self.pushPullIM_cube(maxNumModes=maxNumModes)
-
-    #     weighting_cube = modWeightsFromIMCube(im_cube=self.IM_cube)
-
-    #     if maxNumModes is None:
-    #         maxModes = self.numModes
-    #     elif maxNumModes > self.numModes:
-    #         maxModes = self.numModes
-
-    #     self.frame_weights[:,:maxModes] = weighting_cube

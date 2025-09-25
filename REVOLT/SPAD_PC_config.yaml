@@ -67,12 +67,12 @@ slopes:
   flatNorm: True
   binning: 1
   #Specify where the pupils are and how large for a PYWFS
-  pupilsRadius: 17 #5 #17 #17 #4 #9 #15 #17 # 9
+  pupilsRadius: 29 #5 #17 #17 #4 #9 #15 #17 # 9
   pupils:
-  - 22,20 #5,5 #22,20 #5,5 #10,11 #11,11  #21,23 #22,20 # 21,22   11,11
-  - 108,20 #26,5 #108,20 #26,5 #53,11 #53, 11 #107,23 #107,20 #  106,22 53,10
-  - 21,105 #5,26 #21,105 #5,26 #10,54 #10, 53 #20,108 #22,105 # 21,107 11,53
-  - 107,106 #26,26 #107,106 #26,27 #53,54 #53, 54 #107,109 #107,106 # 106,107 54,53
+  - 30, 32 #5,5 #22,20 #5,5 #10,11 #11,11  #21,23 #22,20 # 21,22   11,11
+  - 98,32 #26,5 #108,20 #26,5 #53,11 #53, 11 #107,23 #107,20 #  106,22 53,10
+  - 29,98 #5,26 #21,105 #5,26 #10,54 #10, 53 #20,108 #22,105 # 21,107 11,53
+  - 98,98 #26,26 #107,106 #26,27 #53,54 #53, 54 #107,109 #107,106 # 106,107 54,53
   functions:
   - computeSignal
 
@@ -82,7 +82,7 @@ tr_ff:
   type: TRPYWFS
   signalType: full_frame
   affinity: 4
-  validSubApsFile: "res/SPADvalidAps.npy"
+  validSubApsFile: "res/SPAD_subaps_24sept2025.npy"
   binning: 1
   functions:
   - computeSignal
@@ -93,7 +93,7 @@ wfc:
   name: "ALPAO"
   serial: "alpaoHSDM277-15-005"
   numActuators: 277
-  numModes: 100
+  numModes: 99
   #flatFile: "/home/revoltuser/pyRTC/REVOLT/wfcShape.npy" #"/home/revoltuser/pyRTC/REVOLT/eyeDoctor_07March2024.fits"
   saveFile: "res/wfcShape.npy"
   #m2cFile:  "res/m2c.npy"

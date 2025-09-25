@@ -22,9 +22,8 @@ def computeFullFramePYWFS(p1=np.array([],dtype=np.float32),
                        p3=np.array([],dtype=np.float32), 
                        p4=np.array([],dtype=np.float32)):
     signal = np.concatenate((p1,p2,p3,p4))
-    #signal_normed = signal / np.sum(signal)
-
-    return signal
+    signal_normed = signal / np.sum(signal)
+    return signal_normed
 
 class FullFrameProcess(pyRTCComponent):
 

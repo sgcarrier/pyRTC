@@ -248,7 +248,7 @@ class hardwareLauncher:
     
     def read(self):
         try:
-            reply = self.processSocket.recv(4096*2).decode()
+            reply = self.processSocket.recv(4096*4).decode()
             return json.loads(reply)
         except socket.timeout:
             return -1
@@ -352,7 +352,7 @@ class Listener:
         return
     
     def read(self):
-        reply = self.RTCsocket.recv(4096).decode()
+        reply = self.RTCsocket.recv(4096*4).decode()
         if reply is None:
             return None
         else:

@@ -18,9 +18,9 @@ class AndorIXon(WavefrontSensor):
         self.cam = Andor.AndorSDK2Camera(idx=conf["idx"], temperature="off", fan_mode="low", amp_mode=None)
         time.sleep(0.1)
         #Turnoff cooler
-        if self.cam.is_cooler_on():
-            print("WARNING: cooler is on, turning it off")
-            self.cam.set_cooler(on=False)
+        #if self.cam.is_cooler_on():
+        #    print("WARNING: cooler is on, turning it off")
+        #    self.cam.set_cooler(on=False)
 
 
         self.total_photon_flux = 0

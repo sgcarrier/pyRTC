@@ -11,3 +11,9 @@ REVOLT/res/*
 
 # Don't commit Hermes files
 pyRTC/hardware/Hermes/*
+
+
+# recording files
+*.fits
+*.hdf5
+*.npy

@@ -7,8 +7,8 @@ from pyRTC.hardware.MPDSPADCam import *
 from pyRTC.FullFrameProcess import *
 from pyRTC.FullFrameProcessCustomArea import *
 from pyRTC.TimeResolvedFullFrameProcessCustomArea import *
+from pyRTC.TimeResolvedLoopWithRemoteWFC import *
 
-from pyRTC.LoopWithRemoteWFC import *
 
 #%%
 
@@ -24,15 +24,20 @@ trwfs = MPDSPADCam(conf=confTRWFS)
 
 #%%
 trwfs.advancedMode(True)
-trwfs.setExposure(1000) # 10ns steps in advanced mode
+trwfs.setExposure(4166) # 41666.66 ns = 24 Khz exact # 10ns steps in advanced mode
 trwfs.setNIntegFrames(1) # maybe increase this?
 trwfs.applySettingsToCamera() # Appy the settings to the camera previously put
 
+
+#%%
+# trwfs.setNFrames(1)
+trwfs.enable_sync_mode()
+trwfs.applySettingsToCamera()
 #%%
 trwfs.start()
 
 #%%
-trwfs.record_data(100, "test2")
+trwfs.record_data_bypass(1000, "sky_with_dark_with_correction_1h09_24sept2025")
 
 #%%
 ################## Setup Full Frame Signal ##############
@@ -55,7 +60,15 @@ a = remote_wfc.getProperty("currentCorrection")
 
 #%%
 
-remote_wfc.run("push", 10, 0.01)
+remote_wfc.run("push", 1, 0.05)
+
+
+
+#%%
+newCorrection =np.zeros(100).astype(np.float32)
+newCorrection[0] = 0.05
+newCorrection[1] = -0.00
+remote_wfc.run("write", newCorrection)
 
 #%%
 remote_wfc.run("flatten")
@@ -64,7 +77,7 @@ remote_wfc.run("flatten")
 ################## Setup loop ##############
 
 
-loop = LoopWithRemoteWFS(conf, remote_wfc)
+loop = TimeResolvedLoopWithRemoteWFC(conf, None)
 
 
 

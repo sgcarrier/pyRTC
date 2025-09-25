@@ -62,6 +62,7 @@ class LoopWithRemoteWFS(pyRTCComponent):
         self.signal2DShm = ImageSHM("signal2D", (self.signal2D_width, self.signal2D_height), self.signal2DDType)
 
         self.remoteWFC = remoteWFC
+        self.numModes = self.confWFC['numModes']
         #Read wfc metadata and open a stream to the shared memory
         #self.wfcMeta = ImageSHM("wfc_meta", (ImageSHM.METADATA_SIZE,), np.float64).read_noblock_safe()
         #self.wfcDType = float_to_dtype(self.wfcMeta[3])
@@ -105,6 +106,10 @@ class LoopWithRemoteWFS(pyRTCComponent):
         self.perturbAmp = amp
         return
 
+
+    def convertForTransmission(self, data):
+        return (data*1e9).astype(np.int32)
+
     def pushPullIM(self):
 
         self.flatten()
@@ -115,7 +120,7 @@ class LoopWithRemoteWFS(pyRTCComponent):
             #Plus amplitude
             correction[i] = self.pokeAmp
             #Post a new shape to be made
-            self.remoteWFC.run("write", correction)
+            self.remoteWFC.run("write", self.convertForTransmission(correction))
             #Add some delay to ensure one-to-one
             time.sleep(self.hardwareDelay)
             #Burn the first new image since we were moving the DM during the exposure
@@ -129,7 +134,7 @@ class LoopWithRemoteWFS(pyRTCComponent):
             #Minus amplitude
             correction[i] = -self.pokeAmp
             #Post a new shape to be made
-            self.remoteWFC.run("write", correction)
+            self.remoteWFC.run("write", self.convertForTransmission(correction))
             #Add some delay to ensure one-to-one
             time.sleep(self.hardwareDelay)
             #Burn the first new image since we were moving the DM during the exposure
@@ -168,7 +173,7 @@ class LoopWithRemoteWFS(pyRTCComponent):
 
     def flatten(self):
         #self.wfcShm.write(self.flat)
-        self.wfc.run("flatten")
+        self.remoteWFC.run("flatten")
         return
     
     def computeCM(self):
@@ -202,7 +207,7 @@ class LoopWithRemoteWFS(pyRTCComponent):
         newCorrection = self.updateCorrectionPOL(correction=currentCorrection, 
                                                  slopes=residual_slopes)
         newCorrection[self.numActiveModes:] = 0
-        self.remoteWFC.run("write", newCorrection)
+        self.remoteWFC.run("write", self.convertForTransmission(newCorrection))
 
         return
 
@@ -215,9 +220,19 @@ class LoopWithRemoteWFS(pyRTCComponent):
                                         gCM=self.gCM, 
                                         slopes=slopes)
         newCorrection[self.numActiveModes:] = 0
-        self.remoteWFC.run("write", newCorrection)
+        self.remoteWFC.run("write", self.convertForTransmission(newCorrection))
         return
     
+    def leakyIntegrator(self):
+
+        slopes = self.signalShm.read()
+        currentCorrection = (1-self.leakyGain)*np.array(self.remoteWFC.getProperty("currentCorrection"))
+        newCorrection = updateCorrection(correction=currentCorrection, 
+                                        gCM=self.gCM, 
+                                        slopes=slopes)
+        newCorrection[self.numActiveModes:] = 0
+        self.remoteWFC.run("write", self.convertForTransmission(newCorrection))
+        return
 
     def plotIM(self, row=None):
         # if not (row is None):
