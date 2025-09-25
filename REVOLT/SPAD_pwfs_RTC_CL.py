@@ -10,6 +10,7 @@ from pyRTC.TimeResolvedFullFrameProcessCustomArea import *
 from pyRTC.TimeResolvedLoopWithRemoteWFC import *
 
 
+
 #%%
 
 config = '../REVOLT/SPAD_PC_config.yaml'
@@ -37,7 +38,7 @@ trwfs.applySettingsToCamera()
 trwfs.start()
 
 #%%
-trwfs.record_data_bypass(1000, "sky_with_dark_with_correction_1h09_24sept2025")
+trwfs.record_data_direct(1000, "hip14632_trget_with_dark_with_correction_12h50_25sept2025_2")
 
 #%%
 ################## Setup Full Frame Signal ##############
@@ -60,15 +61,11 @@ a = remote_wfc.getProperty("currentCorrection")
 
 #%%
 
-remote_wfc.run("push", 1, 0.05)
+remote_wfc.run("push", 0, 0.05)
 
 
 
-#%%
-newCorrection =np.zeros(100).astype(np.float32)
-newCorrection[0] = 0.05
-newCorrection[1] = -0.00
-remote_wfc.run("write", newCorrection)
+
 
 #%%
 remote_wfc.run("flatten")
@@ -77,21 +74,35 @@ remote_wfc.run("flatten")
 ################## Setup loop ##############
 
 
-loop = TimeResolvedLoopWithRemoteWFC(conf, None)
+loop = TimeResolvedLoopWithRemoteWFC(conf, remote_wfc, settings_name="trloop")
 
 
+
+#%%
+
+loop.computeIM()
+loop.flatten()
+
+
+#%%
+saved = []
+for i in range(500):
+    loop.timeResolvedIntegratorWithLeak()
+    #saved.append(loop.currentCorrection)
+#%%
+loop.flatten()
+#%%
+trwfs.record_data_direct(1000, "trwfs_0g3_ffw_2h08_25sept2025")
+
+#%%
+loop.start()
+
+#%%
+loop.stop()
 
 #%%
 
 
 
 
-
-
-
-
-
-
-
-
-
+# %%

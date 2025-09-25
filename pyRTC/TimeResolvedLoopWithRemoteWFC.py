@@ -163,6 +163,10 @@ class TimeResolvedLoopWithRemoteWFC(pyRTCComponent):
         self.FF_correction_function =  updateCorrectionTRFF
         self.TR_norm_correction_function = updateCorrectionTR
 
+        self.IM = np.zeros((self.signalSize, self.numModes),dtype=self.signalDType)
+        self.CM = np.zeros((self.numModes, self.signalSize),dtype=self.signalDType)
+
+
         self.loadPushPullCube()
 
         super().__init__(self.confLoop)    
@@ -172,6 +176,23 @@ class TimeResolvedLoopWithRemoteWFC(pyRTCComponent):
         self.gain = gain
         self.gCM = self.gain*self.CM
         return
+    
+    def flatten(self):
+        #self.wfcShm.write(self.flat)
+        self.remoteWFC.run("flatten")
+        return
+    
+    def computeCM(self):
+        self.numActiveModes = self.numModes-self.numDroppedModes
+        if self.numActiveModes < 0:
+            print("Invalid Number of Modes used in CM. Check numDroppedModes")
+            return
+        self.CM[:self.numActiveModes,:] = np.linalg.pinv(self.IM[:,:self.numActiveModes], rcond=0)
+        self.CM[self.numActiveModes:,:] = 0
+        self.gCM = self.gain*self.CM
+        self.fIM = np.copy(self.IM)
+        self.fIM[:,self.numActiveModes:] = 0
+        return 
 
     def setPeturbAmp(self, amp):
         self.perturbAmp = amp
@@ -234,16 +255,17 @@ class TimeResolvedLoopWithRemoteWFC(pyRTCComponent):
             self.computeCM()
 
     def findModeOrder(self, modeNumber):
-        order = 1
-        rangeList = [0,1,2]
-        done = False
-        while not done:
-            if modeNumber in rangeList:
-                done = True
-            else:
-                rangeList = list(range(np.max(rangeList)+1,np.max(rangeList)+len(rangeList)+3))
-                order +=1
-        return order
+        return 1
+        # order = 1
+        # rangeList = [0,1,2]
+        # done = False
+        # while not done:
+        #     if modeNumber in rangeList:
+        #         done = True
+        #     else:
+        #         rangeList = list(range(np.max(rangeList)+1,np.max(rangeList)+len(rangeList)+3))
+        #         order +=1
+        # return order
 
 
     def pushPullRef_cube(self, maxNumModes=None):
@@ -339,6 +361,8 @@ class TimeResolvedLoopWithRemoteWFC(pyRTCComponent):
 
         self.currentCorrection = (1-self.leakyGain)*np.array(self.remoteWFC.getProperty("currentCorrection"))
 
+        slopes_TR = self.getTRSlopes()
+        self.latest_slopes = slopes_TR
         # Remove this next line because it would grab the current correction AND turbulence applied to the DM 
         #currentCorrection = self.wfcShm.read()
 

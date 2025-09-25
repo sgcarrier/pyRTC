@@ -13,10 +13,11 @@ loop:
   numDroppedModes: 0
   pokeAmp: 0.01 #
   numItersIM: 5
+  IMFile: "andor_IM_24sept2025.npy"
   affinity: 2
   method: push-pull
   functions:
-  - standardIntegrator
+  - leakyIntegrator
 
 
 trloop:
@@ -24,10 +25,11 @@ trloop:
   numDroppedModes: 0
   pokeAmp: 0.01 #
   numItersIM: 5
+  pushPullFile: "IM_cube_001_pokeamp_25sept2025_2.npy"
   affinity: 2
   method: push-pull
   functions:
-  - timeResolvedIntegratorWithTurbulence
+  - timeResolvedIntegratorWithLeak
 
 
 trwfs:
@@ -39,8 +41,8 @@ trwfs:
   nIntegFrames: 1
   width: 32  
   height: 64 
-  darkCount: 100
-  #darkFile: "res/spad_dark.npy"
+  darkCount: 1000
+  darkFile: "spad_dark_25sept2025.npy"
   affinity: 3
   functions:
   - expose
@@ -82,7 +84,7 @@ tr_ff:
   type: TRPYWFS
   signalType: full_frame
   affinity: 4
-  validSubApsFile: "res/SPAD_subaps_24sept2025.npy"
+  validSubApsFile: "valid_aps_spad_25sept2025.npy"
   binning: 1
   functions:
   - computeSignal

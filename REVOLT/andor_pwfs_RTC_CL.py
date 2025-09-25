@@ -28,7 +28,7 @@ wfs.open_shutter()
 wfs.cam.get_EMCCD_gain()
 
 #%%
-wfs.cam.set_EMCCD_gain(150) # 150 for the lab
+wfs.cam.set_EMCCD_gain(300) # 150 for the lab
 
 #%%
 # TODO test turning on the Andor cooler
@@ -107,7 +107,7 @@ remote_wfc.run("write", newCorrection*100000)
 #%%
 ################## Setup loop ##############
 
-remote_wfc.run("saveShape", "res/tmp_flat_2.npy")
+remote_wfc.run("saveShape", "res/best_flat_4.npy")
 
 #%%
 loop = LoopWithRemoteWFS(conf, remote_wfc)
@@ -174,7 +174,7 @@ for i in range(num_acq):
 
 #%%
 
-save_images_to_fits(data, "andor_flat_gain300_with_dark_2h11_24sept2025.fits")
+save_images_to_fits(data, "andor_pwfs_ol_sky_gain300_0g00001_10h31_24sept2025.fits")
 
 
 

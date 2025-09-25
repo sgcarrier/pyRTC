@@ -116,7 +116,7 @@ class TimeResolvedFullFrameProcessCustomArea(pyRTCComponent):
     def computeSignal(self):
         cube = self.readImage().astype(self.signalDType)
         if self.signalType == "full_frame":
-            validSignal = cube[:, self.validSubAps]
+            validSignal = cube[:, self.validSubAps] / np.sum(cube[:, self.validSubAps])
 
             self.signal.write(validSignal)
             self.signal2D.write(self.computeSignal2D(validSignal))
