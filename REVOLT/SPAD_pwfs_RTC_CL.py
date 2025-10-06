@@ -31,14 +31,13 @@ trwfs.applySettingsToCamera() # Appy the settings to the camera previously put
 
 
 #%%
-# trwfs.setNFrames(1)
+trwfs.setNFrames(48)
 trwfs.enable_sync_mode()
 trwfs.applySettingsToCamera()
 #%%
 trwfs.start()
 
-#%%
-trwfs.record_data_direct(1000, "hip14632_trget_with_dark_with_correction_12h50_25sept2025_2")
+
 
 #%%
 ################## Setup Full Frame Signal ##############
@@ -47,9 +46,11 @@ trwfs.record_data_direct(1000, "hip14632_trget_with_dark_with_correction_12h50_2
 sig = TimeResolvedFullFrameProcessCustomArea(conf=conf)
 sig.start()
 
+#plt.imshow(np.sum(sig.read(), axis=0))
+
 
 #%%
-################## Setup WFC ##############
+################## Connect to remote WFC ##############
 
 # Dont forget to start the DM on the other PC
 confWFC = conf["wfc"]
@@ -57,43 +58,36 @@ remote_wfc = hardwareLauncher("../pyRTC/hardware/ALPAODM.py", confWFC, 3000, rem
 remote_wfc.host = "132.246.192.209"
 remote_wfc.launch()
 #%%
-a = remote_wfc.getProperty("currentCorrection")
-
-#%%
-
-remote_wfc.run("push", 0, 0.05)
-
-
-
-
-
-#%%
 remote_wfc.run("flatten")
 
 #%%
 ################## Setup loop ##############
 
-
 loop = TimeResolvedLoopWithRemoteWFC(conf, remote_wfc, settings_name="trloop")
-
-
 
 #%%
 
 loop.computeIM()
 loop.flatten()
 
-
 #%%
-saved = []
+import timeit
+
 for i in range(500):
-    loop.timeResolvedIntegratorWithLeak()
-    #saved.append(loop.currentCorrection)
+    #loop.timeResolvedIntegratorWithLeak()
+    saved.append(loop.currentCorrection)
 #%%
 loop.flatten()
 #%%
-trwfs.record_data_direct(1000, "trwfs_0g3_ffw_2h08_25sept2025")
+trwfs.record_data_direct(1000, "SPAD_TR_CL_0g3_0L02_11h08_25sept2025")
 
+#%%
+loop.setGain(0.00001)
+loop.leakyGain = 0.00
+
+#%%
+loop.setGain(0.0)
+loop.leakyGain = 0.00
 #%%
 loop.start()
 
@@ -102,7 +96,26 @@ loop.stop()
 
 #%%
 
+valid_aps = np.load("valid_aps_spad_25sept2025.npy")
 
+#%%
+loop.changeWeightsAndUpdate(np.ones_like(loop.frame_weights))
 
+#%%
+loop.switchToFF()
 
 # %%
+loop.switchToFFwithWeights()
+
+#%%
+start_time = time.time()
+for i in range(1000):
+    loop.timeResolvedIntegratorWithLeak()
+stop_time = time.time()
+
+print((stop_time-start_time)/1000)
+
+#%%
+
+
+

@@ -7,7 +7,7 @@ from pyRTC.hardware.MPDSPADCam import *
 from pyRTC.FullFrameProcess import *
 from pyRTC.FullFrameProcessCustomArea import *
 from pyRTC.TimeResolvedFullFrameProcessCustomArea import *
-
+from pyRTC.SlopesProcess import *
 from pyRTC.LoopWithRemoteWFC import *
 
 #%%
@@ -28,7 +28,7 @@ wfs.open_shutter()
 wfs.cam.get_EMCCD_gain()
 
 #%%
-wfs.cam.set_EMCCD_gain(300) # 150 for the lab
+wfs.cam.set_EMCCD_gain(150) # 150 for the lab
 
 #%%
 # TODO test turning on the Andor cooler
@@ -56,9 +56,13 @@ time.sleep(1)
 #%%
 ################## Setup Full Frame Signal ##############
 
-# For normal PWFS
-sig = FullFrameProcess(conf=conf)
-sig.start()
+# For full frame PWFS
+#sig = FullFrameProcess(conf=conf)
+#sig.start()
+
+conf["slopes"]["signalType"] = "slopes"
+sig = SlopesProcess(conf=conf)
+#sig.start()
 
 #%%
 
@@ -173,13 +177,9 @@ for i in range(num_acq):
 
 
 #%%
+save_images_to_fits(data, "andor_flat_slopes_25sept2025_2.fits")
 
-save_images_to_fits(data, "andor_pwfs_ol_sky_gain300_0g00001_10h31_24sept2025.fits")
-
-
-
-
-
-
+#%%
+remote_wfc.run("saveShape", "res/andor_flat_slopes_25sept2025_2.npy")
 
 # %%
