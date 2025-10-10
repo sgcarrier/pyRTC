@@ -62,7 +62,7 @@ time.sleep(1)
 
 conf["slopes"]["signalType"] = "slopes"
 sig = SlopesProcess(conf=conf)
-#sig.start()
+sig.start()
 
 #%%
 
@@ -95,7 +95,7 @@ a = remote_wfc.getProperty("currentCorrection")
 
 #%%
 
-remote_wfc.run("push", 98, 0.01)
+remote_wfc.run("push", 1, 0.01)
 
 #%%
 remote_wfc.run("flatten")
@@ -111,7 +111,7 @@ remote_wfc.run("write", newCorrection*100000)
 #%%
 ################## Setup loop ##############
 
-remote_wfc.run("saveShape", "res/best_flat_4.npy")
+remote_wfc.run("saveShape", "res/best_flat_slopes_08oct2025_lab.npy")
 
 #%%
 loop = LoopWithRemoteWFS(conf, remote_wfc)
@@ -121,7 +121,7 @@ loop = LoopWithRemoteWFS(conf, remote_wfc)
 loop.computeIM()
 
 #%%
-for i in range(100):
+for i in range(50):
     loop.leakyIntegrator()
 
 #%%

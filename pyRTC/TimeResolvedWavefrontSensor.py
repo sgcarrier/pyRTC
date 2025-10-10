@@ -44,12 +44,12 @@ class TimeResolvedWavefrontSensor(pyRTCComponent):
         return self.cube.read()
     
     def takeDark(self):
-        self.setDark(np.zeros_like(self.dark))
-        dark = np.zeros(self.imageShape, dtype=np.float64)
+        self.setDark(np.zeros_like(self.dark, dtype=np.float32))
+        dark = np.zeros(self.imageShape, dtype=np.float32)
         for i in range(self.darkCount):
-            frames = self.read().astype(np.float64)
-            dark += np.mean(frames, axis=0)
-        dark /= self.darkCount
+            frames = self.read().astype(np.float32)
+            dark += np.sum(frames, axis=0)
+        dark /= (self.darkCount*frames.shape[0])
         self.setDark(dark)        
         return 
 

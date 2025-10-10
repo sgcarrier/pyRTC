@@ -181,6 +181,7 @@ class hardwareLauncher:
                 
             # Create a socket object
             self.processSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.processSocket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             print(f"Waiting for Process at {self.host}:{self.port}")
             connected = False
             restTime = 2
@@ -219,6 +220,12 @@ class hardwareLauncher:
         for i, arg in enumerate(args):
             message[f"arg_{i+1}"] = arg
         return self.writeAndRead(message)
+
+    def run_noresp(self, function, *args, timeout = None):
+        message = {"type": "run", "function": function}
+        for i, arg in enumerate(args):
+            message[f"arg_{i+1}"] = arg
+        return self.write(message)
 
     def writeAndRead(self,message):
         if self.running:

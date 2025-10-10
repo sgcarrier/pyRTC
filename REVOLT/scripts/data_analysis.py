@@ -34,7 +34,7 @@ plt.title(f"All acquisitons of frame {frame_number} stacked")
 
 from mpl_toolkits.axes_grid1 import ImageGrid
 
-all_stacked_frame = np.sum(dataset[:,:,:,5:40], axis=0)
+all_stacked_frame = np.sum(dataset[:,:,:,:], axis=0)
 imgs = []
 for i in range(48):
     imgs.append(all_stacked_frame[i,:,:])

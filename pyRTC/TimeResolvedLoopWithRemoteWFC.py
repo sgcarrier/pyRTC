@@ -48,8 +48,9 @@ class TimeResolvedLoopWithRemoteWFC(pyRTCComponent):
         self.pokeAmp = setFromConfig(self.confLoop, "pokeAmp", 1e-2)
         self.numItersIM = setFromConfig(self.confLoop, "numItersIM", 100) 
         self.delay = setFromConfig(self.confLoop, "delay", 0)
-        self.IMMethod = setFromConfig(self.confLoop, "IMMethod", "push-pull") 
-        self.IMFile = setFromConfig(self.confLoop, "IMFile", "")
+        #self.IMMethod = setFromConfig(self.confLoop, "IMMethod", "push-pull") 
+        #self.IMFile = setFromConfig(self.confLoop, "IMFile", "")
+        self.REFFile = setFromConfig(self.confLoop, "REFFile", "")
         
         self.IM_cube = np.zeros(( self.numFrames, self.signalSize, self.numModes),dtype=self.signalDType)
         self.push_cube = np.zeros(( self.numFrames, self.signalSize, self.numModes),dtype=self.signalDType)
@@ -68,11 +69,13 @@ class TimeResolvedLoopWithRemoteWFC(pyRTCComponent):
 
         self.ref_signal_per_mode_normed = None
         self.ref_signal_normed = None
-        self.frame_weights = np.ones((self.numFrames,self.numModes))
+        self.frame_weights = np.ascontiguousarray(np.ones((self.numFrames,self.numModes), dtype=np.float32))
 
         self.FF_active= False
         self.FF_weighted_active= False
 
+        self.IM = np.ascontiguousarray(np.zeros((self.signalSize, self.numModes),dtype=self.signalDType))
+        self.CM = np.ascontiguousarray(np.zeros((self.numModes, self.signalSize),dtype=self.signalDType))
 
         self.loadCLibAndFunctions()
 
@@ -84,6 +87,10 @@ class TimeResolvedLoopWithRemoteWFC(pyRTCComponent):
         self.loopCounterLimit= 1000
         self._loop_counter = 0
         self._loop_delay = 0
+
+        self.manual_cam_obj = None
+        self.left_limit = 0
+        self.right_limit = 47
 
         super().__init__(self.confLoop)    
 
@@ -210,6 +217,11 @@ class TimeResolvedLoopWithRemoteWFC(pyRTCComponent):
                 self.pokeAmp = data["pokeAmp"]
                 self.frame_weights = np.ascontiguousarray(data["weights"], dtype=np.float32)
 
+            if self.REFFile != '':
+                with open(filename, 'rb') as f: 
+                    data = pickle.load(f)
+                    self.ref_slopes = np.ascontiguousarray(data["ref"], dtype=np.float32)
+
             self.makeIM(self.push_cube,
                         self.pull_cube,  
                         self.ref_slopes,
@@ -301,6 +313,15 @@ class TimeResolvedLoopWithRemoteWFC(pyRTCComponent):
         #signal_TR = np.ascontiguousarray(np.zeros((self.signalSize, self.numFrames),order='C', dtype=np.float32))
         signal_TR = np.ascontiguousarray(self.signalShm.read() - self.signal_TR_ref, dtype=np.float32)
         return signal_TR
+    
+    def getTRSlopes_bypass(self):
+        '''
+        Get the slopes for every frame position
+        '''
+        if self.manual_cam_obj:
+        #signal_TR = np.ascontiguousarray(np.zeros((self.signalSize, self.numFrames),order='C', dtype=np.float32))
+            signal_TR = np.ascontiguousarray((self.manual_cam_obj.data[:,:,self.left_limit:self.right_limit]).reshape(self.numFrames, -1), dtype=np.float32)
+        return signal_TR
 
 
     def grabRefTRSlopes(self):
@@ -328,7 +349,7 @@ class TimeResolvedLoopWithRemoteWFC(pyRTCComponent):
 
 
         if self.first_loop:
-            newCorrection = np.ascontiguousarray((1-self.leakyGain)*np.array(self.remoteWFC.getProperty("currentCorrection")), dtype.np.float32)
+            newCorrection = np.ascontiguousarray((1-self.leakyGain)*np.array(self.remoteWFC.getProperty("currentCorrection")), dtype=np.float32)
             self.first_loop = False
         else:
             newCorrection = np.ascontiguousarray((1-self.leakyGain)* self._local_currentCorrection, dtype=np.float32)
@@ -337,14 +358,15 @@ class TimeResolvedLoopWithRemoteWFC(pyRTCComponent):
         #newCorrection = self.currenCorrection.copy()
         # Remove this next line because it would grab the current correction AND turbulence applied to the DM
 
-        self.latest_slopes = self.getTRSlopes()
+
+        self.latest_slopes = self.getTRSlopes_bypass()
         if self.FF_active:
             if self.ref_signal_normed is not None:
                 self.FF_correction_function(self.numModes, self.numFrames, self.signalSize,
-                                            self.gCM.ctypes.data_as(ctypes.POINTER(c_types.c_float)),
-                                            self.latest_slopes.ctypes.data_as(ctypes.POINTER(c_types.c_float)),
-                                            self.ref_signal_normed.ctypes.data_as(ctypes.POINTER(c_types.c_float)),
-                                            newCorrection.ctypes.data_as(ctypes.POINTER(c_types.c_float)))
+                                            self.gCM.ctypes.data_as(ctypes.POINTER(ctypes.c_float)),
+                                            self.latest_slopes.ctypes.data_as(ctypes.POINTER(ctypes.c_float)),
+                                            self.ref_signal_normed.ctypes.data_as(ctypes.POINTER(ctypes.c_float)),
+                                            newCorrection.ctypes.data_as(ctypes.POINTER(ctypes.c_float)))
 
             else:
                 print("Error: ref signal never defined, skipping loop")
@@ -352,22 +374,22 @@ class TimeResolvedLoopWithRemoteWFC(pyRTCComponent):
         elif self.FF_weighted_active:
             if self.ref_signal_per_mode_normed is not None:
                 self.FF_w_correction_function(self.numModes, self.numFrames, self.signalSize,
-                                              self.gCM.ctypes.data_as(ctypes.POINTER(c_types.c_float)),
-                                              self.latest_slopes.ctypes.data_as(ctypes.POINTER(c_types.c_float)),
-                                              self.frames_weights.ctypes.data_as(ctypes.POINTER(c_types.c_float)),
-                                              self.ref_signal_per_mode_normed.ctypes.data_as(ctypes.POINTER(c_types.c_float)),
-                                              newCorrection.ctypes.data_as(ctypes.POINTER(c_types.c_float)))
+                                              self.gCM.ctypes.data_as(ctypes.POINTER(ctypes.c_float)),
+                                              self.latest_slopes.ctypes.data_as(ctypes.POINTER(ctypes.c_float)),
+                                              self.frame_weights.ctypes.data_as(ctypes.POINTER(ctypes.c_float)),
+                                              self.ref_signal_per_mode_normed.ctypes.data_as(ctypes.POINTER(ctypes.c_float)),
+                                              newCorrection.ctypes.data_as(ctypes.POINTER(ctypes.c_float)))
             else:
                 print("Error: ref signal never defined, skipping loop")
                 return
         else:
             if self.ref_signal_per_mode_normed is not None:
                 self.TR_norm_correction_function(self.numModes, self.numFrames, self.signalSize,
-                                                 self.gCM.ctypes.data_as(ctypes.POINTER(c_types.c_float)),
-                                                 self.latest_slopes.ctypes.data_as(ctypes.POINTER(c_types.c_float)),
-                                                 self.frames_weights.ctypes.data_as(ctypes.POINTER(c_types.c_float)),
-                                                 self.ref_signal_per_mode_normed.ctypes.data_as(ctypes.POINTER(c_types.c_float)),
-                                                 newCorrection.ctypes.data_as(ctypes.POINTER(c_types.c_float)))
+                                                 self.gCM.ctypes.data_as(ctypes.POINTER(ctypes.c_float)),
+                                                 self.latest_slopes.ctypes.data_as(ctypes.POINTER(ctypes.c_float)),
+                                                 self.frame_weights.ctypes.data_as(ctypes.POINTER(ctypes.c_float)),
+                                                 self.ref_signal_per_mode_normed.ctypes.data_as(ctypes.POINTER(ctypes.c_float)),
+                                                 newCorrection.ctypes.data_as(ctypes.POINTER(ctypes.c_float)))
             else:
                 print("Error: weighted ref signal never defined, skipping loop")
                 return
@@ -405,13 +427,13 @@ class TimeResolvedLoopWithRemoteWFC(pyRTCComponent):
         self.IM       = np.ascontiguousarray(np.zeros((self.signalSize, self.numModes)), dtype=np.float32)
         push_weighted = np.sum(push * weights[:, np.newaxis, :], axis=0)
         pull_weighted = np.sum(pull * weights[:, np.newaxis, :], axis=0)
-        ref_weighted  = ref @ weights
+        ref_weighted  = (ref.T @ weights).T
         for mode in range(self.numModes):
             push_signal      = (push_weighted[:,mode] / np.sum(push_weighted[:,mode]))
             pull_signal      = (pull_weighted[:,mode] / np.sum(pull_weighted[:,mode]))
             self.IM[:,mode]  = (push_signal - pull_signal) / (2*(poke/np.sqrt(self.findModeOrder(mode))))
 
-        self.ref_signal_per_mode_normed = np.ascontiguousarray( (ref_weighted/ np.sum(ref_weighted, axis=0)), dtype=np.float32)
+        self.ref_signal_per_mode_normed = np.ascontiguousarray( (ref_weighted/ np.sum(ref_weighted, axis=1)[:, np.newaxis]), dtype=np.float32)
 
 
     def modWeightsFromPushPullRef(self, push, pull, ref, pokeAmp):
@@ -420,11 +442,11 @@ class TimeResolvedLoopWithRemoteWFC(pyRTCComponent):
         maxNumModes = push.shape[2]
         weighting_cube = np.zeros((numFrames, maxNumModes))
         for i in range(maxNumModes):
-            signal_push = (push[:,:,i]/np.sum(push[:,:,i], axis=1))
-            signal_pull = (pull[:,:,i]/np.sum(pull[:,:,i], axis=1))
+            signal_push = (push[:,:,i]/(np.sum(push[:,:,i], axis=1)[:, np.newaxis]))
+            signal_pull = (pull[:,:,i]/(np.sum(pull[:,:,i], axis=1)[:, np.newaxis]))
             total = (signal_push - signal_pull) / (2*(pokeAmp/np.sqrt(self.findModeOrder(i))))
             avg_val = np.mean(total, axis=1)
-            weighting_cube[:,i] = np.sqrt(((np.mean((total-avg_val[:, np.newaxis])**2, axis=0))))
+            weighting_cube[:,i] = np.sqrt(((np.mean((total-avg_val[:, np.newaxis])**2, axis=1))))
             weighting_cube[:,i] = (weighting_cube[:,i]  / np.sum(np.abs(weighting_cube[:,i])))*numFrames
 
         return weighting_cube
@@ -521,7 +543,7 @@ class TimeResolvedLoopWithRemoteWFC(pyRTCComponent):
             else:
                 self.IM[:, :, mode] = (push_signal - pull_signal) / (2*self.pokeAmp[mode])
 
-        self.ref_signal_per_mode_normed = np.ascontiguousarray((ref_weighted.T) / np.sum(ref_weighted, axis='0,1'), dtype=np.float32)
+        self.ref_signal_per_mode_normed = np.ascontiguousarray((ref_weighted.T) / np.sum(ref_weighted, axis=(0,1))[:, np.newaxis, np.newaxis], dtype=np.float32)
 
         self.computeCM_FF()
 

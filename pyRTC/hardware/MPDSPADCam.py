@@ -20,7 +20,7 @@ class MPDSPADCam(TimeResolvedWavefrontSensor):
         self.setNIntegFrames(setFromConfig(conf, "nIntegFrames", 300))
         self.setNCounters(setFromConfig(conf, "nCounters", 1))
 
-        self.screamers = [(20,12)]
+        self.screamers = [(20,12), (4, 40), (7, 2), (7, 33), (7, 48), (9, 7), (10, 12), (11, 14), (11, 36), (11, 50), (12, 5), (12, 51), (13, 9), (13, 45), (14, 53), (19, 33), (21, 30), (21, 37), (28, 7), (28, 34), (28, 44), (28, 50), (29, 17), (29, 42), (30, 60), (30, 61), (31, 43), (31, 44)]
 
         self.cam = Hermes(Hermes.CameraMode.NORMAL) # Start in normal
         self.cam.SetCameraPar(Exposure = self.exposure,  # if in normal mode, this is ignored and forced to 10.40 us, else is in 10ns increments
@@ -37,6 +37,7 @@ class MPDSPADCam(TimeResolvedWavefrontSensor):
         #self._number_of_acquisitions = 100
         self._done_recording = False
         self._start_recording = False 
+        self.offset_read = 0
         super().__init__(conf)
         return 
 
@@ -102,30 +103,80 @@ class MPDSPADCam(TimeResolvedWavefrontSensor):
             else:
                 self.cam.SetAdvancedMode(Hermes.State.DISABLED)
 
-    def expose(self):
+
+    def start(self):
+        #self.cam.ContAcqToMemoryStart()
+        self.offset_read = 0
+        super().start()
+
+    def stop(self):
+        super().stop()
+        time.sleep(0.01)
+        #self.cam.ContAcqToMemoryStop()
+        self.offset_read = 0
+
+
+    def expose_snap(self):
+        
         if self.cam.IsTriggered() or (not self.inSyncMode) :
             self.cam.SnapPrepare()
             self.cam.SnapAcquire()
 
             # TODO do we want to use other counters?
+            #data = np.empty((0,), dtype=np.uint8)
+            #while data.size < (self.nFrames+self.offset_read)*32*64:
+            #    data = np.concatenate((data, self.cam.ContAcqToMemoryGetBuffer()))
             self.frames = self.cam.SnapGetImageBuffer()[0]  # frames of counter 1 
-            if self.frames.shape[0] != self.nFrames: # Sometimes the snap returns nothing, TODO check to use a flag check maybe?
-                return
-            
+
             for idx in self.screamers:
                 self.frames[:,idx[0], idx[1]] = 0
-
-            #self.frames = np.swapaxes(self.frames, 1,2)
             
             self.data = np.ndarray((self.frames.shape[0],self.frames.shape[1], self.frames.shape[2]), 
                                 buffer= np.ascontiguousarray(self.frames), 
                                 dtype=self.frames.dtype)
-            
-
             super().expose()
 
             if self._start_recording:
-                self._data_cube[self._acq_number,:,:,:] = self.frames
+                self._data_cube[self._acq_number,:,:,:] = self.data
+                self._acq_number += 1
+                if self._acq_number >= self._number_of_acquisitions:
+                    self._done_recording = True
+                    self._start_recording = False
+        return
+
+    def expose(self):
+        
+        if self.cam.IsTriggered() or (not self.inSyncMode) :
+            #self.cam.SnapPrepare()
+            #self.cam.SnapAcquire()
+
+            # TODO do we want to use other counters?
+            data = np.empty((0,), dtype=np.uint8)
+            while data.size < (self.nFrames+self.offset_read)*32*64:
+                data = np.concatenate((data, self.cam.ContAcqToMemoryGetBuffer()))
+            #self.data = self.cam.SnapGetImageBuffer()[0]  # frames of counter 1 
+            #self.frames = self.cam.ContAcqToMemoryGetBuffer()
+            #if self.frames.shape[0] != self.nFrames: # Sometimes the snap returns nothing, TODO check to use a flag check maybe?
+            #    return
+            data = data[0: self.cam.num_counters * self.cam.num_pixels * int(np.floor((data.size / (self.cam.num_counters * self.cam.num_pixels))))]
+        
+            all_frames = (self.cam.BufferToFrames(data, self.cam.num_pixels, self.cam.num_counters)[0])
+            self.frames = all_frames[self.offset_read:self.offset_read+48,:,:]
+            self.offset_read = self.nFrames - ((all_frames.shape[0]-self.offset_read) % self.nFrames)
+            
+            #self.data = (self.cam.BufferToFrames(buf, self.cam.num_pixels, self.cam.num_counters)[0])[:48,:,:]
+            
+            for idx in self.screamers:
+                self.frames[:,idx[0], idx[1]] = 0
+            
+            # self.data = np.ndarray((frames.shape[0],frames.shape[1], frames.shape[2]), 
+            #                     buffer= np.ascontiguousarray(frames), 
+            #                     dtype=frames.dtype)
+            self.data = self.frames
+            super().expose()
+
+            if self._start_recording:
+                self._data_cube[self._acq_number,:,:,:] = self.data
                 self._acq_number += 1
                 if self._acq_number >= self._number_of_acquisitions:
                     self._done_recording = True
@@ -155,7 +206,7 @@ class MPDSPADCam(TimeResolvedWavefrontSensor):
             print("Stop running before calling this function")
             return 
 
-        data_cube = np.zeros((number_of_acquisitions, self.frames.shape[0], self.frames.shape[1], self.frames.shape[2]))
+        data_cube = np.zeros((number_of_acquisitions, self.data.shape[0], self.data.shape[1], self.data.shape[2]))
         acq = 0
         while (acq < number_of_acquisitions) :
             if self.cam.IsTriggered() or (not self.inSyncMode) :
@@ -268,3 +319,31 @@ class MPDSPADCam(TimeResolvedWavefrontSensor):
             if attrs:
                 for key, value in attrs.items():
                     dset.attrs[key] = value
+
+
+if __name__ == "__main__":
+
+    # Create argument parser
+    parser = argparse.ArgumentParser(description="Read a config file from the command line.")
+
+    # Add command-line argument for the config file
+    parser.add_argument("-c", "--config", required=True, help="Path to the config file")
+    parser.add_argument("-p", "--port", required=True, help="Port for communication")
+
+    # Parse command-line arguments
+    args = parser.parse_args()
+
+    conf = read_yaml_file(args.config)
+
+    pid = os.getpid()
+    set_affinity((conf["trwfs"]["affinity"])%os.cpu_count()) 
+    decrease_nice(pid)
+
+    confWFC = conf["trwfs"]
+    trwfs = MPDSPADCam(conf=confWFC)
+    trwfs.start()
+
+    l = Listener(trwfs, port = int(args.port))
+    while l.running:
+        l.listen()
+        time.sleep(1e-3)

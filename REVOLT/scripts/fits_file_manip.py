@@ -1,3 +1,4 @@
+#%%
 from astropy.io import fits
 import matplotlib.pyplot as plt
 
@@ -19,3 +20,6 @@ def extra_data_from_fits(fits_file_path):
         print(f"Error: The file '{fits_file_path}' was not found.")
     except Exception as e:
         print(f"An error occurred: {e}")
+
+#%%
+

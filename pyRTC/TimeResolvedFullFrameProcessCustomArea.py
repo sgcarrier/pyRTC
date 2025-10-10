@@ -152,17 +152,16 @@ if __name__ == "__main__":
     # Parse command-line arguments
     args = parser.parse_args()
 
-    # TODO
-    # conf = read_yaml_file(args.config)
+    conf = read_yaml_file(args.config)
 
-    # pid = os.getpid()
-    # set_affinity(conf["slopes"]["affinity"]%os.cpu_count())
-    # decrease_nice(pid)
+    pid = os.getpid()
+    set_affinity(conf["tr_ff"]["affinity"]%os.cpu_count())
+    decrease_nice(pid)
 
-    # slopes = SlopesProcess(conf=conf)
-    # slopes.start()
+    slopes = TimeResolvedFullFrameProcessCustomArea(conf=conf)
+    slopes.start()
 
-    # l = Listener(slopes, port= int(args.port))
-    # while l.running:
-    #     l.listen()
-    #     time.sleep(1e-3)
+    l = Listener(slopes, port= int(args.port))
+    while l.running:
+        l.listen()
+        time.sleep(1e-3)

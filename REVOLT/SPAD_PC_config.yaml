@@ -13,7 +13,7 @@ loop:
   numDroppedModes: 0
   pokeAmp: 0.01 #
   numItersIM: 5
-  IMFile: "andor_IM_24sept2025.npy"
+  #IMFile: "andor_IM_24sept2025.npy"
   affinity: 2
   method: push-pull
   functions:
@@ -24,12 +24,14 @@ trloop:
   gain: 0.1
   numDroppedModes: 0
   pokeAmp: 0.01 #
-  numItersIM: 5
-  pushPullFile: "IM_cube_001_pokeamp_25sept2025_2.npy"
+  numItersIM: 50
+  #pushPullFile: "temp_cube.pickle"
+  pushPullFile: "IM_SNAP_08oct2025_night_run_no_screamers.pickle"
+  #REFFile:''
   affinity: 2
   method: push-pull
   functions:
-  - timeResolvedIntegratorWithLeak
+  - timeResolvedIntegratorWithLeak_C
 
 
 trwfs:
@@ -42,10 +44,10 @@ trwfs:
   width: 32  
   height: 64 
   darkCount: 1000
-  darkFile: "spad_dark_25sept2025.npy"
+  darkFile: "res/sky_latest_dark.npy"
   affinity: 3
   functions:
-  - expose
+  - expose_snap
 
 wfs:
   name: ANDOR_IXON
@@ -84,7 +86,7 @@ tr_ff:
   type: TRPYWFS
   signalType: full_frame
   affinity: 4
-  validSubApsFile: "valid_aps_spad_25sept2025.npy"
+  validSubApsFile: "res/valid_subaps_08oct2025.npy"
   binning: 1
   functions:
   - computeSignal
