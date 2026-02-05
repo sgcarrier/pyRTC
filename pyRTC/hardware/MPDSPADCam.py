@@ -38,6 +38,7 @@ class MPDSPADCam(TimeResolvedWavefrontSensor):
         self._done_recording = False
         self._start_recording = False 
         self.offset_read = 0
+        self.rolling_data = None
         super().__init__(conf)
         return 
 
@@ -105,15 +106,17 @@ class MPDSPADCam(TimeResolvedWavefrontSensor):
 
 
     def start(self):
-        #self.cam.ContAcqToMemoryStart()
+        self.cam.ContAcqToMemoryStart()
         self.offset_read = 0
+        self.rolling_data = None
         super().start()
 
     def stop(self):
         super().stop()
         time.sleep(0.01)
-        #self.cam.ContAcqToMemoryStop()
+        self.cam.ContAcqToMemoryStop()
         self.offset_read = 0
+        self.rolling_data = None
 
 
     def expose_snap(self):
@@ -151,18 +154,24 @@ class MPDSPADCam(TimeResolvedWavefrontSensor):
             #self.cam.SnapAcquire()
 
             # TODO do we want to use other counters?
-            data = np.empty((0,), dtype=np.uint8)
-            while data.size < (self.nFrames+self.offset_read)*32*64:
-                data = np.concatenate((data, self.cam.ContAcqToMemoryGetBuffer()))
-            #self.data = self.cam.SnapGetImageBuffer()[0]  # frames of counter 1 
-            #self.frames = self.cam.ContAcqToMemoryGetBuffer()
-            #if self.frames.shape[0] != self.nFrames: # Sometimes the snap returns nothing, TODO check to use a flag check maybe?
-            #    return
-            data = data[0: self.cam.num_counters * self.cam.num_pixels * int(np.floor((data.size / (self.cam.num_counters * self.cam.num_pixels))))]
-        
-            all_frames = (self.cam.BufferToFrames(data, self.cam.num_pixels, self.cam.num_counters)[0])
-            self.frames = all_frames[self.offset_read:self.offset_read+48,:,:]
-            self.offset_read = self.nFrames - ((all_frames.shape[0]-self.offset_read) % self.nFrames)
+            #self.rolling_data = np.empty((0,), dtype=np.uint8)
+            if self.rolling_data is not None:
+                current_size = self.rolling_data.size
+            else:
+                current_size = 0
+            while current_size < (self.nFrames)*32*64:
+                data = self.cam.ContAcqToMemoryGetBuffer()
+                all_frames = (self.cam.BufferToFrames(data, self.cam.num_pixels, self.cam.num_counters)[0])
+                if self.rolling_data is not None:
+                    self.rolling_data = np.concatenate((self.rolling_data, all_frames))
+                else:
+                    self.rolling_data = all_frames
+                
+                current_size = self.rolling_data.size
+
+            self.frames = self.rolling_data[:self.nFrames]
+            self.rolling_data = self.rolling_data[self.nFrames:]
+            #self.offset_read = self.nFrames - ((all_frames.shape[0]-self.offset_read) % self.nFrames)
             
             #self.data = (self.cam.BufferToFrames(buf, self.cam.num_pixels, self.cam.num_counters)[0])[:48,:,:]
             

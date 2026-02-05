@@ -246,6 +246,8 @@ class TimeResolvedLoopWithRemoteWFC(pyRTCComponent):
 
 
     def pushPullRef_cube(self, maxNumModes=None):
+
+        #TODO make bypass 
         
         if maxNumModes is None:
             maxNumModes = self.numModes
@@ -255,7 +257,8 @@ class TimeResolvedLoopWithRemoteWFC(pyRTCComponent):
         #Average out N new WFS frames
         self.ref_slopes=  np.ascontiguousarray(np.zeros((self.numFrames, self.signalSize)), dtype=np.float32)
         for n in range(self.numItersIM):
-            self.ref_slopes += self.signalShm.read()
+            self.ref_slopes += self.getTRSlopes_bypass()
+            time.sleep(1e-3)
         self.ref_slopes /= self.numItersIM
 
         #For each mode
@@ -272,12 +275,15 @@ class TimeResolvedLoopWithRemoteWFC(pyRTCComponent):
             #Add some delay to ensure one-to-one
             time.sleep(self.hardwareDelay)
             #Burn the first new image since we were moving the DM during the exposure
-            self.signalShm.read()
+            for j in range(20):
+                self.getTRSlopes_bypass()
+                time.sleep(1e-3)
 
             self.tmp_plus =  np.zeros((self.numFrames, self.signalSize))
             #Average out N new WFS frames
             for n in range(self.numItersIM):
-                self.tmp_plus += self.signalShm.read()
+                self.tmp_plus += self.getTRSlopes_bypass()
+                time.sleep(1e-3)
             self.tmp_plus /= self.numItersIM
 
             #minus amplitude
@@ -287,13 +293,16 @@ class TimeResolvedLoopWithRemoteWFC(pyRTCComponent):
             #Add some delay to ensure one-to-one
             time.sleep(self.hardwareDelay)
             #Burn the first new image since we were moving the DM during the exposure
-            self.signalShm.read()
+            for j in range(20):
+                self.getTRSlopes_bypass()
+                time.sleep(1e-3)
 
 
             self.tmp_minus =  np.zeros((self.numFrames, self.signalSize))
             #Average out N new WFS frames
             for n in range(self.numItersIM):
-                self.tmp_minus += self.signalShm.read()
+                self.tmp_minus += self.getTRSlopes_bypass()
+                time.sleep(1e-3)
             self.tmp_minus /= self.numItersIM
 
 
@@ -351,6 +360,7 @@ class TimeResolvedLoopWithRemoteWFC(pyRTCComponent):
         if self.first_loop:
             newCorrection = np.ascontiguousarray((1-self.leakyGain)*np.array(self.remoteWFC.getProperty("currentCorrection")), dtype=np.float32)
             self.first_loop = False
+            self.latest_slopes = np.zeros_like(self.getTRSlopes_bypass())
         else:
             newCorrection = np.ascontiguousarray((1-self.leakyGain)* self._local_currentCorrection, dtype=np.float32)
         #self.currentCorrection = np.ascontiguousarray((1-self.leakyGain)*np.array(self.remoteWFC.getProperty("currentCorrection")))
@@ -358,8 +368,19 @@ class TimeResolvedLoopWithRemoteWFC(pyRTCComponent):
         #newCorrection = self.currenCorrection.copy()
         # Remove this next line because it would grab the current correction AND turbulence applied to the DM
 
+        #self.latest_slopes = self.getTRSlopes()
+        #CORRECT = True
+        if not np.all(self.getTRSlopes_bypass() == self.latest_slopes):
+            self.latest_slopes = self.getTRSlopes_bypass()
+            CORRECT = True
+        else:
+            CORRECT = False
+    
+        #self.latest_slopes = self.getTRSlopes()
+        if CORRECT == False:
+            tmp_newCorrection = newCorrection.copy()
+            newCorrection *= 0
 
-        self.latest_slopes = self.getTRSlopes_bypass()
         if self.FF_active:
             if self.ref_signal_normed is not None:
                 self.FF_correction_function(self.numModes, self.numFrames, self.signalSize,
@@ -395,26 +416,37 @@ class TimeResolvedLoopWithRemoteWFC(pyRTCComponent):
                 return
         newCorrection[self.numActiveModes:] = 0
 
-        if np.isnan(newCorrection).any():
-            self.currentCorrection = self.currentCorrection # dont change correction due to nan
+        if CORRECT :
+            if np.isnan(newCorrection).any():
+                self.currentCorrection = self.currentCorrection # dont change correction due to nan
+            else:
+                self.currentCorrection = newCorrection # Safe to update
+            self.remoteWFC.run("write", self.convertForTransmission(self.currentCorrection))
+
+            self._local_currentCorrection = self.currentCorrection
         else:
-            self.currentCorrection = newCorrection # Safe to update
-        self.remoteWFC.run("write", self.convertForTransmission(self.currentCorrection))
+            newCorrection = tmp_newCorrection.copy()
 
-        self._local_currentCorrection = self.currentCorrection
-
-        time.sleep(self._loop_delay)
+        self.accurate_delay(self._loop_delay)
 
         if self._loop_counter > self.loopCounterLimit:
             self._loop_counter = 0
             self._stop_timer = time.perf_counter()
             self.currentLoopPeriod = ((self._stop_timer - self._start_timer)/self.loopCounterLimit)
-            self._loop_delay = np.max([0,self.aimedLoopPeriod -self.currentLoopPeriod])
+            self._loop_delay += np.max([0,self.aimedLoopPeriod -self.currentLoopPeriod])
             self._loop_delay = np.min([self._loop_delay, self.aimedLoopPeriod]) # Safety measure in case, the function is called manually
         else:
             self._loop_counter += 1
 
+    def busy_wait(self):
+        for i in range(1000):
+            _ = i*i
 
+    def accurate_delay(self, delay_s):
+        """Function to provide an accurate time delay in seconds using a busy-wait."""
+        target_time = time.perf_counter() + delay_s
+        while time.perf_counter() < target_time:
+            pass
 
     def resetCurrentCorrection(self):
         self.currentCorrection = np.zeros((self.numModes))

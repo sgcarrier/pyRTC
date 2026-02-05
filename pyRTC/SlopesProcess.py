@@ -1,15 +1,17 @@
 """
-Slopes Superclass
+Loop Superclass
 """
 from pyRTC.Pipeline import *
 from pyRTC.utils import *
-from pyRTC.pyRTCComponent import *
+import threading
 import argparse
+import sys
 import os 
 import numpy as np
 import matplotlib.pyplot as plt
 import time
 from numba import jit
+from sys import platform
 
 @jit(nopython=True)
 def computeSlopesPYWFS(p1=np.array([],dtype=np.float32), 
@@ -67,7 +69,7 @@ def computeSlopesSHWFS(image=np.array([],dtype=np.float32),
                     slopes[i+numRegions,j] = np.sum(xvals*sub_im.T)/norm
     return slopes - unaberratedSlopes
 
-class SlopesProcess(pyRTCComponent):
+class SlopesProcess:
 
     def __init__(self, conf) -> None:
 
@@ -122,7 +124,7 @@ class SlopesProcess(pyRTCComponent):
             self.validSubAps = np.ones(self.signal2DShape, dtype=bool)
             self.loadValidSubAps()
 
-            self.signalSize = int(np.sum(self.validSubAps))
+            self.signalSize = np.sum(self.validSubAps)
             self.signalShape = (self.signalSize,)
 
             print(f'subApSpacing: {self.subApSpacing}')
@@ -141,7 +143,34 @@ class SlopesProcess(pyRTCComponent):
             self.refSlopes = np.zeros(self.signal2DShape, dtype=self.signalDType)
             self.loadRefSlopes()
 
-        super().__init__(self.conf)
+        self.affinity = self.conf["affinity"]
+        self.alive = True
+        self.running = False
+        functionsToRun = self.conf["functions"]
+        self.workThreads = []
+        for i, functionName in enumerate(functionsToRun):
+            # Launch a separate thread
+            workThread = threading.Thread(target=work, args = (self,functionName), daemon=True)
+            # Start the thread
+            workThread.start()
+            # Set CPU affinity for the thread
+            set_affinity((self.affinity+i)%os.cpu_count())
+            self.workThreads.append(workThread)
+
+        return
+
+    def __del__(self):
+        self.stop()
+        self.alive=False
+        return
+
+    def start(self):
+        self.running = True
+        return
+
+    def stop(self):
+        self.running = False
+        return
     
     def read(self):
         return self.signal.read()
@@ -167,7 +196,7 @@ class SlopesProcess(pyRTCComponent):
         if filename == '':
             self.validSubAps = np.ones_like(self.validSubAps)
         else: #If we have a filename
-            self.validSubAps = np.load(filename).astype(self.validSubAps.dtype)
+            self.validSubAps = np.load(filename)
         return
 
 
