@@ -8,7 +8,7 @@ import matplotlib
 
 #%%
 
-f = h5py.File('sky_with_dark_with_correction_1h05_24sept2025.hdf5', 'r')
+f = h5py.File('test_new_hs_flat.hdf5', 'r')
 
 
 #%%
@@ -25,7 +25,7 @@ all_stacked = np.sum(np.sum(dataset, axis=0),axis=0)
 plt.imshow(all_stacked)
 plt.title("All acquisitons and frames stacked")
 #%%
-frame_number = 15
+frame_number = 36
 all_stacked_frame = np.sum(dataset[:,frame_number, :,:],axis=0)
 
 plt.imshow(all_stacked_frame)

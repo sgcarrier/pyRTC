@@ -25,8 +25,8 @@ trloop:
   numDroppedModes: 0
   pokeAmp: 0.01 #
   numItersIM: 50
-  #pushPullFile: "temp_cube.pickle"
-  pushPullFile: "IM_SNAP_08oct2025_night_run_no_screamers.pickle"
+  #pushPullFile: "res/IM_testing_20nov2025.pickle"
+  pushPullFile: "res/IM_high_speed_20nov2025_night.pickle"
   #REFFile:''
   affinity: 2
   method: push-pull
@@ -44,10 +44,10 @@ trwfs:
   width: 32  
   height: 64 
   darkCount: 1000
-  darkFile: "res/sky_latest_dark.npy"
+  darkFile: "res/lab_latest_dark.npy"
   affinity: 3
   functions:
-  - expose_snap
+  - expose
 
 wfs:
   name: ANDOR_IXON
@@ -80,6 +80,23 @@ slopes:
   functions:
   - computeSignal
 
+
+
+# slopes:
+#   type: PYWFS
+#   signalType: full_frame
+#   affinity: 4
+#   flatNorm: True
+#   binning: 1
+#   #Specify where the pupils are and how large for a PYWFS
+#   pupilsRadius: 9 #5 #17 #17 #4 #9 #15 #17 # 9
+#   pupils:
+#   - 9, 29 #5,5 #22,20 #5,5 #10,11 #11,11  #21,23 #22,20 # 21,22   11,11
+#   - 22,29 #26,5 #108,20 #26,5 #53,11 #53, 11 #107,23 #107,20 #  106,22 53,10
+#   - 9,42 #5,26 #21,105 #5,26 #10,54 #10, 53 #20,108 #22,105 # 21,107 11,53
+#   - 22,42 #26,26 #107,106 #26,27 #53,54 #53, 54 #107,109 #107,106 # 106,107 54,53
+#   functions:
+#   - computeSignal
 
 #TODO  adjust the validSubAps for REVOLT
 tr_ff:

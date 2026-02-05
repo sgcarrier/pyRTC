@@ -121,8 +121,9 @@ loop = LoopWithRemoteWFS(conf, remote_wfc)
 loop.computeIM()
 
 #%%
-for i in range(50):
-    loop.leakyIntegrator()
+
+loop.leakyIntegrator()
+
 
 #%%
 loop.flatten()
@@ -180,6 +181,6 @@ for i in range(num_acq):
 save_images_to_fits(data, "andor_flat_slopes_25sept2025_2.fits")
 
 #%%
-remote_wfc.run("saveShape", "res/andor_flat_slopes_25sept2025_2.npy")
+remote_wfc.run("saveShape", "res/spad_slopes_19nov2025_2.npy")
 
 # %%
