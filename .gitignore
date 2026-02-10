@@ -17,3 +17,7 @@ pyRTC/hardware/Hermes/*
 *.fits
 *.hdf5
 *.npy
+
+
+#macOS
+.DS_Store

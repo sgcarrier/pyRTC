@@ -1,4 +1,5 @@
 #%%
+# Imports
 from pyRTC.Pipeline import *
 from pyRTC.utils import *
 import os
@@ -11,7 +12,7 @@ from pyRTC.SlopesProcess import *
 from pyRTC.LoopWithRemoteWFC import *
 
 #%%
-
+# Config 
 config = '../REVOLT/SPAD_PC_config.yaml'
 conf = read_yaml_file(config)
 
@@ -118,6 +119,7 @@ loop = LoopWithRemoteWFS(conf, remote_wfc)
 
 
 #%%
+#Compute IM
 loop.computeIM()
 
 #%%
@@ -183,4 +185,41 @@ save_images_to_fits(data, "andor_flat_slopes_25sept2025_2.fits")
 #%%
 remote_wfc.run("saveShape", "res/spad_slopes_19nov2025_2.npy")
 
+
+#%%
+#Initiate slowdata
+slowdata= np.zeros((num_acq, 128,128))
+slowdatacount = 0
+
 # %%
+#slow loop & collect Data
+#Don't include integration in config for "loop" object, using Simon's integrator for now 
+#the way this is set up for now -> should have atm turb gen in integrator so it moves by one step when this is run 
+
+loop.leakyIntegrator()
+slowdata[i,:,:]=wfs.read()
+slowdatacount += 1
+
+#%%
+#save slow data
+slowdata_filename = ""
+save_images_to_fits(slowdata, slowdata_filename)
+
+
+# %%
+#Delayed loop & collect Data
+#Don't include integration in config for "loop" object, using Simon's integrator for now 
+#the way this is set up for now -> should have atm turb gen in integrator so it moves by one step for each for loop iteration 
+
+delaydata= np.zeros((num_acq, 128,128))
+num_acq=1000
+
+for i in range(num_acq):
+    loop.leakyIntegrator()
+    delaydata[i,:,:] = wfs.read()
+
+
+delaydata_filename = ""
+save_images_to_fits(delaydata, delaydata_filename)
+
+#will need to test, when ML integrator is introduced can add time delay if issues 
