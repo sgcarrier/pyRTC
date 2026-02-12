@@ -187,8 +187,29 @@ remote_wfc.run("saveShape", "res/spad_slopes_19nov2025_2.npy")
 
 
 #%%
+#Save data pairs to fits 
+def save_pairs_to_fits( data1, data2, filename, headers=None, overwrite=True):
+
+    # Create primary HDU
+    primary_hdu = fits.PrimaryHDU(data1)
+    hdu2 = fits.ImageHDU(data=data2,name="DM_commands")
+
+    # Add headers if provided
+    if headers:
+        for key, value in headers.items():
+            primary_hdu.header[key] = value
+
+    # Create HDU list and write
+    hdul = fits.HDUList([primary_hdu,hdu2])
+    hdul.writeto(filename, overwrite=overwrite)
+    hdul.close()
+
+#%%
 #Initiate slowdata
+#sets max num aqu.... should trim arrays before saving
+num_acq = 1000
 slowdata= np.zeros((num_acq, 128,128))
+slowdataDM = np.zeros((num_acq, 277))
 slowdatacount = 0
 
 # %%
@@ -198,12 +219,13 @@ slowdatacount = 0
 
 loop.leakyIntegrator()
 slowdata[i,:,:]=wfs.read()
+slowdataDM[i,:]=remote_wfc.getProperty("currentCorrection")
 slowdatacount += 1
 
 #%%
 #save slow data
 slowdata_filename = "mlData/slowdata_date_time.fits"
-save_images_to_fits(slowdata, slowdata_filename)
+save_pairs_to_fits(slowdata, slowdataDM, slowdata_filename)
 
 
 # %%
@@ -211,16 +233,18 @@ save_images_to_fits(slowdata, slowdata_filename)
 #Don't include integration in config for "loop" object, using Simon's integrator for now 
 #the way this is set up for now -> should have atm turb gen in integrator so it moves by one step for each for loop iteration 
 
-delaydata= np.zeros((num_acq, 128,128))
 num_acq=1000
+delaydata= np.zeros((num_acq, 128,128))
+delaydataDM = np.zeros((num_acq, 277))
 
 for i in range(num_acq):
     #introduce delay as needed: 
     #time.sleep(1)
     loop.leakyIntegrator()
     delaydata[i,:,:] = wfs.read()
+    delaydataDM[i,:]=remote_wfc.getProperty("currentCorrection")
 
 
 delaydata_filename = "mlData/delaydata_date_time.fits"
-save_images_to_fits(delaydata, delaydata_filename)
+save_images_to_fits(delaydata, delaydataDM, delaydata_filename)
 
