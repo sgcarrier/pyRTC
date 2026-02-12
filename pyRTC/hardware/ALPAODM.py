@@ -12,6 +12,7 @@ from pyRTC.utils import *
 import struct
 import argparse
 import sys
+import random
 
 #Prevents camera output from messing with communication
 original_stdout = sys.stdout
@@ -116,6 +117,27 @@ class ALPAODM(WavefrontCorrector):
     def __del__(self):
         super().__del__()
         self.dm.Reset()
+        return
+    
+    def genNoiseToHardware(self):
+        #Do all of the normal updating of the super class
+        super().sendToHardware()
+        #generate random noise frame (possible add later -a certain step away from curent status?)
+        #set max and min for noise in config
+        randomShape = np.zeros(self.numActuators, dtype=np.float32)
+        randMax = conf["wfc"]["randMax"]
+        randMin = conf["wfc"]["randMin"]
+
+        for i in range(self.numActuators):
+            rand = random.randint(randMax,randMin)
+            randomShape[i] = self.currentShape[i] + rand
+
+        self.currentShape = randomShape
+        #Cap the Commands to reduce likelihood of DM failiure
+        self.currentShape = np.clip(self.currentShape, -self.CAP, self.CAP)
+        #Send the correction to the actual mirror
+        self.dm.Send(self.currentShape)
+
         return
     
 

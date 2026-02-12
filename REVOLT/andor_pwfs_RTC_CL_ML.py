@@ -202,7 +202,7 @@ slowdatacount += 1
 
 #%%
 #save slow data
-slowdata_filename = ""
+slowdata_filename = "mlData/slowdata_date_time.fits"
 save_images_to_fits(slowdata, slowdata_filename)
 
 
@@ -215,11 +215,12 @@ delaydata= np.zeros((num_acq, 128,128))
 num_acq=1000
 
 for i in range(num_acq):
+    #introduce delay as needed: 
+    #time.sleep(1)
     loop.leakyIntegrator()
     delaydata[i,:,:] = wfs.read()
 
 
-delaydata_filename = ""
+delaydata_filename = "mlData/delaydata_date_time.fits"
 save_images_to_fits(delaydata, delaydata_filename)
 
-#will need to test, when ML integrator is introduced can add time delay if issues 

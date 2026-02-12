@@ -125,4 +125,6 @@ wfc:
   hardwareDelay: 0.001 #seconds
   frameDelay: 0
   functions:
+  randMax:
+  randMin:
   - sendToHardware
