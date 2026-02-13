@@ -1,5 +1,6 @@
 #%%
 # Imports
+import random
 from pyRTC.Pipeline import *
 from pyRTC.utils import *
 import os
@@ -204,6 +205,27 @@ def save_pairs_to_fits( data1, data2, filename, headers=None, overwrite=True):
     hdul.writeto(filename, overwrite=overwrite)
     hdul.close()
 
+def sendRandDM(min, max):
+    if min>80:
+        print("Min too large, did not send")
+        return
+    elif max>80:
+        print("Max too large, did not send")
+        return
+    
+    randCommand = np.zeros(277)
+
+    for i in len(randCommand):
+        randomValue = random.randomint(min, max)*0.01
+        randCommand[i] = randomValue
+
+    remote_wfc.run("write", randCommand)
+
+    return
+
+
+
+
 #%%
 #Initiate slowdata
 #sets max num aqu.... should trim arrays before saving
@@ -225,6 +247,8 @@ slowdatacount += 1
 #%%
 #save slow data
 slowdata_filename = "mlData/slowdata_date_time.fits"
+slowdata = slowdata[:slowdatacount,:,:]
+slowdataDM = slowdataDM[:slowdatacount, :, :]
 save_pairs_to_fits(slowdata, slowdataDM, slowdata_filename)
 
 
@@ -233,7 +257,7 @@ save_pairs_to_fits(slowdata, slowdataDM, slowdata_filename)
 #Don't include integration in config for "loop" object, using Simon's integrator for now 
 #the way this is set up for now -> should have atm turb gen in integrator so it moves by one step for each for loop iteration 
 
-num_acq=1000
+num_acq=100
 delaydata= np.zeros((num_acq, 128,128))
 delaydataDM = np.zeros((num_acq, 277))
 
@@ -242,6 +266,7 @@ for i in range(num_acq):
     #time.sleep(1)
     loop.leakyIntegrator()
     delaydata[i,:,:] = wfs.read()
+    sendRandDM(10,30)
     delaydataDM[i,:]=remote_wfc.getProperty("currentCorrection")
 
 
