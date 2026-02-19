@@ -1,5 +1,6 @@
 #%%
 # Imports
+import datetime
 import random
 from pyRTC.Pipeline import *
 from pyRTC.utils import *
@@ -189,21 +190,28 @@ remote_wfc.run("saveShape", "res/spad_slopes_19nov2025_2.npy")
 
 #%%
 #Save data pairs to fits 
-def save_pairs_to_fits( data1, data2, filename, headers=None, overwrite=True):
+def save_pairs_to_fits( data1, data2, filename, headers1=None, headers2=None, overwrite=True):
 
     # Create primary HDU
     primary_hdu = fits.PrimaryHDU(data1)
+    #Create secondary HDU
     hdu2 = fits.ImageHDU(data=data2,name="DM_commands")
 
     # Add headers if provided
-    if headers:
-        for key, value in headers.items():
+    if headers1:
+        for key, value in headers1.items():
             primary_hdu.header[key] = value
+
+    if headers2:
+        for key, value in headers2.items():
+            hdu2.header[key] = value
 
     # Create HDU list and write
     hdul = fits.HDUList([primary_hdu,hdu2])
     hdul.writeto(filename, overwrite=overwrite)
     hdul.close()
+    
+    return
 
 def sendRandDM(min, max):
     if min>80:
@@ -237,7 +245,7 @@ slowdatacount = 0
 # %%
 #slow loop & collect Data
 #Don't include integration in config for "loop" object, using Simon's integrator for now 
-#the way this is set up for now -> should have atm turb gen in integrator so it moves by one step when this is run 
+#the way this is set up for now ->  run integrator function, read pupils, read DM
 
 loop.leakyIntegrator()
 slowdata[i,:,:]=wfs.read()
@@ -253,9 +261,8 @@ save_pairs_to_fits(slowdata, slowdataDM, slowdata_filename)
 
 
 # %%
-#Delayed loop & collect Data
-#Don't include integration in config for "loop" object, using Simon's integrator for now 
-#the way this is set up for now -> should have atm turb gen in integrator so it moves by one step for each for loop iteration 
+#Delayed loop & collect Data with random DM commands 
+#the way this is set up for now -> delay time, read pupils, read DM, send random command to DM
 
 num_acq=100
 delaydata= np.zeros((num_acq, 128,128))
@@ -263,13 +270,14 @@ delaydataDM = np.zeros((num_acq, 277))
 
 for i in range(num_acq):
     #introduce delay as needed: 
-    #time.sleep(1)
-    loop.leakyIntegrator()
+    time.sleep(0.5)
     delaydata[i,:,:] = wfs.read()
     sendRandDM(10,30)
     delaydataDM[i,:]=remote_wfc.getProperty("currentCorrection")
 
 
-delaydata_filename = "mlData/delaydata_date_time.fits"
-save_images_to_fits(delaydata, delaydataDM, delaydata_filename)
+current_datetime = datetime.datetime.now()
+formatted_datetime = current_datetime.strftime("%Y_%m_%d_%H-%M-%S")
+delaydata_filename = "mlData/delaydata_"+formatted_datetime+".fits"
+save_pairs_to_fits(delaydata, delaydataDM, delaydata_filename)
 
