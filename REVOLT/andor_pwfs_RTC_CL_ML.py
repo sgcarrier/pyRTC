@@ -214,18 +214,26 @@ def save_pairs_to_fits( data1, data2, filename, headers1=None, headers2=None, ov
     return
 
 def sendRandDM(min, max):
-    if min>80:
+#can also update this to take a min and max value from config file 
+
+    if min<-0.5:
         print("Min too large, did not send")
         return
-    elif max>80:
+    elif max>0.5:
         print("Max too large, did not send")
         return
     
-    randCommand = np.zeros(277)
+    randCommand = np.clip(np.random.randn(277) * 0.25, min, max)
+    # Plot sanity check
+    plt.figure(figsize=(10, 4))
+    plt.plot(randCommand, marker='o', markersize=3, linestyle='-', alpha=0.8)
+    plt.axhline(0, color='black', linewidth=1, linestyle='--')
+    plt.title("Noise Signal (277 samples, clipped normal distribution)")
+    plt.xlabel("Sample index")
+    plt.ylabel("Amplitude")
+    plt.grid(True, alpha=0.3)
+    plt.show()
 
-    for i in len(randCommand):
-        randomValue = random.randomint(min, max)*0.01
-        randCommand[i] = randomValue
 
     remote_wfc.run("write", randCommand)
 
@@ -269,11 +277,12 @@ delaydata= np.zeros((num_acq, 128,128))
 delaydataDM = np.zeros((num_acq, 277))
 
 for i in range(num_acq):
-    #introduce delay as needed: 
-    time.sleep(0.5)
     delaydata[i,:,:] = wfs.read()
-    sendRandDM(10,30)
+    #sanity check recieved command = sent command, but can just save command sent probably
     delaydataDM[i,:]=remote_wfc.getProperty("currentCorrection")
+    sendRandDM(10,30)
+    #introduce delay as needed: 
+    time.sleep(0.1)
 
 
 current_datetime = datetime.datetime.now()
