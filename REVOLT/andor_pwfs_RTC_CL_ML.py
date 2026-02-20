@@ -1,7 +1,7 @@
 #%%
 # Imports
 import datetime
-import random
+import numpy as np
 from pyRTC.Pipeline import *
 from pyRTC.utils import *
 import os
@@ -274,6 +274,10 @@ save_pairs_to_fits(slowdata, slowdataDM, slowdata_filename)
 #the way this is set up for now -> delay time, read pupils, read DM, send random command to DM
 
 num_acq=100
+dmMin = -0.5
+dmMax = 0.5
+delayTime = 0.1
+
 delaydata= np.zeros((num_acq, 128,128))
 delaydataDM = np.zeros((num_acq, 277))
 
@@ -281,9 +285,9 @@ for i in range(num_acq):
     delaydata[i,:,:] = wfs.read()
     #sanity check recieved command = sent command, but can just save command sent probably
     delaydataDM[i,:]=remote_wfc.getProperty("currentCorrection")
-    sendRandDM(-0.5,0.5)
+    sendRandDM(dmMin,dmMax)
     #introduce delay as needed: 
-    time.sleep(0.1)
+    time.sleep(delayTime)
 
 
 current_datetime = datetime.datetime.now()
