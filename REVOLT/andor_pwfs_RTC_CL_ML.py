@@ -188,7 +188,7 @@ save_images_to_fits(data, "andor_flat_slopes_25sept2025_2.fits")
 remote_wfc.run("saveShape", "res/spad_slopes_19nov2025_2.npy")
 
 
-#%%
+#%% Functions for Data Collection
 #Save data pairs to fits 
 def save_pairs_to_fits( data1, data2, filename, headers1=None, headers2=None, overwrite=True):
 
@@ -225,15 +225,14 @@ def sendRandDM(min, max):
     
     randCommand = np.clip(np.random.randn(277) * 0.25, min, max)
     # Plot sanity check
-    plt.figure(figsize=(10, 4))
-    plt.plot(randCommand, marker='o', markersize=3, linestyle='-', alpha=0.8)
-    plt.axhline(0, color='black', linewidth=1, linestyle='--')
-    plt.title("Noise Signal (277 samples, clipped normal distribution)")
-    plt.xlabel("Sample index")
-    plt.ylabel("Amplitude")
-    plt.grid(True, alpha=0.3)
-    plt.show()
-
+    # plt.figure(figsize=(10, 4))
+    # plt.plot(randCommand, marker='o', markersize=3, linestyle='-', alpha=0.8)
+    # plt.axhline(0, color='black', linewidth=1, linestyle='--')
+    # plt.title("Noise Signal (277 samples, clipped normal distribution)")
+    # plt.xlabel("Sample index")
+    # plt.ylabel("Amplitude")
+    # plt.grid(True, alpha=0.3)
+    # plt.show()
 
     remote_wfc.run("write", randCommand)
 
@@ -268,7 +267,9 @@ slowdataDM = slowdataDM[:slowdatacount, :, :]
 save_pairs_to_fits(slowdata, slowdataDM, slowdata_filename)
 
 
-# %%
+
+
+# %% Delayed Data Collection
 #Delayed loop & collect Data with random DM commands 
 #the way this is set up for now -> delay time, read pupils, read DM, send random command to DM
 
@@ -280,7 +281,7 @@ for i in range(num_acq):
     delaydata[i,:,:] = wfs.read()
     #sanity check recieved command = sent command, but can just save command sent probably
     delaydataDM[i,:]=remote_wfc.getProperty("currentCorrection")
-    sendRandDM(10,30)
+    sendRandDM(-0.5,0.5)
     #introduce delay as needed: 
     time.sleep(0.1)
 
