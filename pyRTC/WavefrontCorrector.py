@@ -195,7 +195,12 @@ class WavefrontCorrector(pyRTCComponent):
         return self.currentCorrection
 
     def write(self, correction):
-        self.currentCorrection = correction
+        #print("writing")
+        #print(f"writing the following: {correction.dtype}")
+        if np.max(np.abs(correction)) > 0.8:
+            print("ERROR: TOO BIG CORRECTION")
+            exit()
+        self.currentCorrection = np.array(correction)
         self.correctionVector.write(self.currentCorrection, )
         return 
 
