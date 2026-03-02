@@ -252,7 +252,53 @@ class hardwareLauncher:
             return json.loads(reply)
         except socket.timeout:
             return -1
-        
+
+
+class hardwareLauncherUDP(hardwareLauncher):
+
+    def __init__(self, hardwareFile, configFile, port_cmds, port_resps, remoteProcess=True, timeout=None) -> None:
+        self.hardwareFile = hardwareFile
+        self.command = ["python", hardwareFile, "-c", f"{configFile}", "-p", f"{port_cmds}"]
+        self.running = False
+        # Client configuration
+        self.host = '127.0.0.1'  # localhost
+        self.port_cmds = port_cmds
+        self.port_resps = port_resps
+        self.remoteProcess = remoteProcess
+        self.timeout = timeout
+
+        return
+
+    def launch(self):
+        if not self.running:
+            if not self.remoteProcess:
+                print(f"Launching Process: {self.hardwareFile}")
+                self.process = Popen(self.command, stdin=PIPE, stdout=PIPE, text=True, bufsize=1)
+
+            # Create a socket object
+            self.processSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            self.processSocket.bind((self.host, self.port_resps))
+
+            self.running = True
+            if isinstance(self.timeout, float) or isinstance(self.timeout, int):
+                self.processSocket.settimeout(self.timeout)
+
+            print("UDP socket setup")
+
+        return
+
+    def write(self, message):
+        message = json.dumps(message, default=numpy_serializer)
+        self.processSocket.sendto(message.encode(), (self.host, self.port_cmds))
+        return
+
+    def read(self):
+        try:
+            reply, addr = self.processSocket.recvfrom(4096 * 4)
+            return json.loads(reply.decode())
+        except socket.timeout:
+            return -1
+
     
 def numpy_serializer(obj):
     if isinstance(obj, np.ndarray):
@@ -357,7 +403,41 @@ class Listener:
             return None
         else:
             return json.loads(reply)
-    
+
+
+
+class ListenerUDP(Listener):
+
+    def __init__(self, hardware, port_cmds, port_resps, host='127.0.0.1') -> None:
+        self.hardware = hardware
+        self.running = True
+        self.keyCharacter = '$'
+        self.host = host  # default localhost
+        self.port_cmds = port_cmds
+        self.port_resps = port_resps
+
+        self.udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.udp_sock.bind((host, port_cmds))
+        self.OKMessage = {"status": "OK"}
+        self.BadMessage = {"status": "BAD"}
+
+        return
+
+    def write(self, message):
+        message = json.dumps(message, default=numpy_serializer)
+        self.udp_sock.sendto(message.encode(), (self.host, self.port_resps))
+        return
+
+    def read(self):
+        reply, addr = self.udp_sock.recvfrom(4096 * 4)
+        if reply is None:
+            return None
+        else:
+            return json.loads(reply.decode())
+
+
+
+
 def initExistingShm(shmName):
     #Read wfc metadata and open a stream to the shared memory
     shmMeta = ImageSHM(shmName+"_meta", (ImageSHM.METADATA_SIZE,), np.float64).read_noblock_safe()
