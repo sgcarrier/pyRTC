@@ -181,6 +181,7 @@ class hardwareLauncher:
                 
             # Create a socket object
             self.processSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.processSocket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1) 
             print(f"Waiting for Process at {self.host}:{self.port}")
             connected = False
             restTime = 2
@@ -220,6 +221,13 @@ class hardwareLauncher:
             message[f"arg_{i+1}"] = arg
         return self.writeAndRead(message)
 
+    def run_noresp(self, function, *args, timeout = None):
+        message = {"type": "run_noresp", "function": function}
+        for i, arg in enumerate(args):
+            message[f"a_{i+1}"] = arg
+        return self.write(message)
+
+
     def writeAndRead(self,message):
         if self.running:
             self.write(message)
@@ -248,7 +256,7 @@ class hardwareLauncher:
     
     def read(self):
         try:
-            reply = self.processSocket.recv(4096*2).decode()
+            reply = self.processSocket.recv(4096*4).decode()
             return json.loads(reply)
         except socket.timeout:
             return -1
@@ -343,7 +351,7 @@ class Listener:
         request = self.read()
         if request is None:
             return 
-        print(request)
+        #print(request)
         if "type" not in request.keys():
             self.write(self.BadMessage)
 
@@ -382,6 +390,9 @@ class Listener:
                     arg = request[f"arg_{i+1}"]
                     args.append(arg)
                 function = getattr(self.hardware, functionName)
+                #print(args)
+                if functionName == "write" :
+                    args[0] = np.array(args[0])/(1e9)
                 if len(args) > 0:
                     function(*args)
                 else:
@@ -389,6 +400,23 @@ class Listener:
                 self.write(self.OKMessage)
             except:
                 self.write(self.BadMessage)
+        elif requestType == "run_noresp":
+            try:
+                functionName = request["function"]
+                args = []
+                for i in range(0, len(request.keys())-2):
+                    arg = request[f"arg_{i+1}"]
+                    args.append(arg)
+                function = getattr(self.hardware, functionName)
+                print(args)
+                if functionName == "write" :
+                    args[0] = np.array(args[0])/(1e9)
+                if len(args) > 0:
+                    function(*args)
+                else:
+                    function()
+            except:
+                print("run_noresp failed")
         else:
             self.write(self.BadMessage)
 
@@ -398,7 +426,7 @@ class Listener:
         return
     
     def read(self):
-        reply = self.RTCsocket.recv(4096).decode()
+        reply = self.RTCsocket.recv(4096*4).decode()
         if reply is None:
             return None
         else:

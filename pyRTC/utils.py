@@ -175,7 +175,7 @@ def bind_socket(host, start_port, max_attempts=5):
     """Attempts to bind a socket on a range of ports, handling OSError exceptions."""
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)  # Allow reuse of socket addresses
-
+    sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
     for attempt in range(max_attempts):
         try:
             # Attempt to bind the socket

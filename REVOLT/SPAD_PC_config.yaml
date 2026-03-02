@@ -82,12 +82,12 @@ wfc:
   name: "ALPAO"
   serial: "alpaoHSDM277-15-005"
   numActuators: 277
-  numModes: 99
-  flatFile: "/home/revoltuser/pyRTC/REVOLT/res/spad_slopes_20nov2025_night_2.npy"   #flatCmd_Oct82025_2.npy"
+  numModes: 277
+  flatFile: "/home/revoltuser/pyRTC/REVOLT/res/PWFS_flat_Feb20_2026.npy" 
   saveFile: "res/save_wfcShape.npy"
-  m2cFile:  "/home/revoltuser/pyRTC/REVOLT/res/m2c.npy"
-  #floatingActuatorFile: "/home/revoltuser/pyRTC/REVOLT/res/floatingActuators.npy"
-  #floatingInfluenceRadius: 1.5
+  m2cFile:  " " #/home/revoltuser/pyRTC/REVOLT/res/m2c.npy"
+  floatingActuatorFile: "/home/revoltuser/pyRTC/REVOLT/res/floatingActuators.npy"
+  floatingInfluenceRadius: 1.5
   affinity: 5
   commandCap: 0.8
   hardwareDelay: 0.001 #seconds

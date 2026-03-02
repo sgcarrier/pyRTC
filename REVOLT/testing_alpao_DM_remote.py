@@ -4,6 +4,8 @@ from pyRTC.utils import *
 import os
 from pyRTC.hardware.ALPAODM import *
 
+#clear_shms(['wfc'])
+
 LISTENING_PORT = 3000
 
 config = '../REVOLT/SPAD_PC_config.yaml'
