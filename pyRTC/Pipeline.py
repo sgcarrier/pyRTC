@@ -392,7 +392,7 @@ class Listener:
                 function = getattr(self.hardware, functionName)
                 #print(args)
                 if functionName == "write" :
-                    args[0] = np.array(args[0])/(1e9)
+                    args[0] = np.array(args[0])
                 if len(args) > 0:
                     function(*args)
                 else:
@@ -410,7 +410,7 @@ class Listener:
                 function = getattr(self.hardware, functionName)
                 print(args)
                 if functionName == "write" :
-                    args[0] = np.array(args[0])/(1e9)
+                    args[0] = np.array(args[0])
                 if len(args) > 0:
                     function(*args)
                 else:
